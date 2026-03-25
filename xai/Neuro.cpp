@@ -76,8 +76,7 @@ torch::Tensor Neuro::getTensorFromField() {
     TMove cm = current()->move;
 
     for (int i = 0; i < 225; ++i) {
-        if (i == current()->move) data[i] = 0.0f;
-        else if (kl[i] == 1) data[i] = 1.0f;
+        if (kl[i] == 1) data[i] = 1.0f;
         else if (kl[i] == 2) data[i] = -1.0f;
         else data[i] = 0.0f;
     }
@@ -85,33 +84,36 @@ torch::Tensor Neuro::getTensorFromField() {
 };
 
 void Neuro::trainNetworkOnCurrentPosition() {
-    // 1. Получаем данные о текущем сделанном ходе
-    // current() возвращает CursorHistory, где лежит ход и ссылка на узел
-    TMove lastMove = current()->move;
-    TRating lastRating = current()->node->rating;
-
-    // 2. Подготовка входных данных (состояние поля kl)
-    // Важно: в kl уже должен быть результат хода, либо вызовите это ДО хода
     torch::Tensor input = getTensorFromField();
-
-    // 3. Создаем целевой тензор (225 выходов)
     auto targetRatings = torch::zeros({1, 225});
-    auto mask = torch::zeros({1, 225}, torch::kBool);
+    auto mask = torch::full({1, 225}, true, torch::kBool); // Обучаем все 225 клеток
 
-    // Нормализация рейтинга [-32768, 32767] -> [-1.0, 1.0]
-    float normRating = (float)((lastRating+32768) / 65536.0f);
+    TNode *par = current()->node;
 
-    // Указываем нейросети: для этой клетки (lastMove) правильный рейтинг - normRating
-    targetRatings[0][(int)lastMove] = normRating;
-    mask[0][(int)lastMove] = true;
+    // 1. Проходим по всем клеткам поля
+    for (int i = 0; i < 225; ++i) {
+        if (kl[i] > 1) {
+            // Клетка занята: жесткий штраф
+            targetRatings[0][i] = -1.0f;
+        }
+        else {
+            // Клетка пуста: проверяем, есть ли она в нашей базе знаний (TNode)
+            TNode* node = getChild(par, i);
 
-    // 4. Проход обучения
+            if (node) {
+                // Алгоритм уже знает эту позицию! Берем реальный рейтинг
+                targetRatings[0][i] = (float)(node->rating / 32768.0f);
+            } else {
+                // Позиция не исследована
+                targetRatings[0][i] = -0.5f;
+            }
+        }
+    }
+
+    // 2. Стандартный цикл обучения LibTorch
     optimizer->zero_grad();
-    auto output = model->forward(input); // выход нейросети (225 значений tanh)
-
-    // Считаем ошибку только для ОДНОЙ клетки, про которую мы точно знаем рейтинг
-    auto loss = torch::mse_loss(output.index({mask}), targetRatings.index({mask}));
-
+    auto output = model->forward(input);
+    auto loss = torch::mse_loss(output, targetRatings);
     loss.backward();
     optimizer->step();
 
@@ -120,10 +122,11 @@ void Neuro::trainNetworkOnCurrentPosition() {
     if (++iter % 30 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
-            std::cout << "[AI] Модель сохранена. ХэшХ " << current()->node->hashCodeX
+            std::cout << "[AI] Модель сохранена. Ходов " << count
+                      << " ХэшХ " << current()->node->hashCodeX
                       << " ХэшO " << current()->node->hashCodeO
-                      << " Ход: " << (int)lastMove
-                      << " | Рейтинг: " << normRating
+                      //<< " Ход: " << (int)lastMove
+                      //<< " | Рейтинг: " << normRating
                       << " | Loss: " << loss.item<float>() << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
@@ -145,23 +148,24 @@ int Neuro::moveNeuro() {
 };
 
 TMove Neuro::predictBestMove() {
-    // 1. Включаем режим оценки (отключает градиенты и дропаут для скорости)
     torch::NoGradGuard no_grad;
     model->eval();
 
-    // 2. Превращаем текущее поле kl в тензор
     torch::Tensor input = getTensorFromField();
+    // Убираем размерность батча, делаем плоский вектор 225
+    torch::Tensor output = model->forward(input).view({-1});
 
-    // 3. Прогоняем через сеть
-    torch::Tensor output = model->forward(input);
+    // 1. Применяем маску занятых клеток
+    for (int i = 0; i < 225; ++i) {
+        if (kl[i] > 1) {
+            output[i] = -2.0f; // Занято -> худший возможный рейтинг
+        }
+    }
 
-    // 4. Находим индекс самого вероятного хода
-    // argmax вернет индекс нейрона с максимальным значением
-    int64_t bestMoveIdx = output.argmax(1).item<int64_t>();
+    // 2. Выбираем лучший из ОСТАВШИХСЯ
+    int64_t bestMoveIdx = output.argmax(0).item<int64_t>();
 
-    // Возвращаем режим обучения обратно
     model->train();
-
     return (TMove)bestMoveIdx;
 };
 
