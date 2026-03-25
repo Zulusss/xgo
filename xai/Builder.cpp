@@ -110,7 +110,7 @@ void Builder::buildTree() {
   while(count>count0) {
     back();
     // Обучаем, если позиция достаточно изучена
-    if (current()->node->totalChilds >= 10000 && current()->node->totalChilds <= 10000 + added) {
+    if (count > 1 && current()->node->totalChilds >= 10000) { // && current()->node->totalChilds <= 10000 + added) {
         //std::cout << "[AI] added = " << added << std::endl;
         trainNetworkOnCurrentPosition();
     }
@@ -210,9 +210,11 @@ torch::Tensor Builder::getTensorFromField() {
     auto options = torch::TensorOptions().dtype(torch::kFloat32);
     auto t = torch::zeros({1, 1, 15, 15}, options);
     float* data = t.data_ptr<float>();
+    TMove cm = current()->move;
 
     for (int i = 0; i < 225; ++i) {
-        if (kl[i] == 1) data[i] = 1.0f;
+        if (i == current()->move) data[i] = 0.0f;
+        else if (kl[i] == 1) data[i] = 1.0f;
         else if (kl[i] == 2) data[i] = -1.0f;
         else data[i] = 0.0f;
     }
