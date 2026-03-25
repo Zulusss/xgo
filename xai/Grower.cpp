@@ -13,7 +13,7 @@
 #pragma package(smart_init)
 
 Grower::Grower(SimplyNumbers *simplyGen, Hashtable *movesHash,
-                  int gameMode) :  GameBoard(simplyGen, movesHash, gameMode) {
+                  int gameMode) :  Neuro(simplyGen, movesHash, gameMode) {
 
     bool isCreated;
     TNode *node = movesHash->getOrCreate(1, 1, 0, isCreated);

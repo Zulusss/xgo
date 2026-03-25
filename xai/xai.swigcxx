@@ -12,4 +12,5 @@
 %include "Expander.h"
 %include "Builder.h"
 %include "GameBoard.h"
+%include "Neuro.h"
 %include "Grower.h"

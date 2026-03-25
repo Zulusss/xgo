@@ -4,9 +4,9 @@
 #define GrowerH
 //---------------------------------------------------------------------------
 
-#include "GameBoard.h"
+#include "Neuro.h"
 
-class Grower : public GameBoard {
+class Grower : public Neuro {
 
 public:
         Grower(SimplyNumbers *simplyGen, Hashtable *movesHash, int gameMode);
