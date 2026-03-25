@@ -101,17 +101,20 @@ void Builder::buildTree() {
     cur = current();
   }
 
-    int oldTotal = cur->node->totalChilds;
+
 
   expand(0, cur->node);
 
+    int added = cur->node->totalChilds;
+
+  while(count>count0) {
+    back();
     // Обучаем, если позиция достаточно изучена
-    if (cur->node->totalChilds > 10000 && oldTotal <= 10000) {
+    if (current()->node->totalChilds >= 10000 && current()->node->totalChilds <= 10000 + added) {
+        //std::cout << "[AI] added = " << added << std::endl;
         trainNetworkOnCurrentPosition();
     }
-
-
-  while(count>count0) back();
+  }
 
   building = false;
 
@@ -247,7 +250,7 @@ void Builder::trainNetworkOnCurrentPosition() {
 
     // Периодическое сохранение
     static int iter = 0;
-    if (++iter % 1000 == 0) {
+    if (++iter % 20 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
             std::cout << "[AI] Модель успешно сохранена. loss = " << loss << std::endl;
