@@ -220,45 +220,52 @@ torch::Tensor Builder::getTensorFromField() {
 }
 
 void Builder::trainNetworkOnCurrentPosition() {
+    // 1. Получаем данные о текущем сделанном ходе
+    // current() возвращает CursorHistory, где лежит ход и ссылка на узел
+    TMove lastMove = current()->move;
+    TRating lastRating = current()->node->rating;
+
+    // 2. Подготовка входных данных (состояние поля kl)
+    // Важно: в kl уже должен быть результат хода, либо вызовите это ДО хода
     torch::Tensor input = getTensorFromField();
 
-    // Целевые значения рейтингов для всех клеток (по умолчанию 0.0)
+    // 3. Создаем целевой тензор (225 выходов)
     auto targetRatings = torch::zeros({1, 225});
-
-    // Маска: обучаем только те клетки, которые реально обсчитал алгоритм
     auto mask = torch::zeros({1, 225}, torch::kBool);
 
-    for (int i = 0; i < childs.count; ++i) {
-        TNode *node = childs.node[i];
-        TMove move = childs.move[i];
+    // Нормализация рейтинга [-32768, 32767] -> [-1.0, 1.0]
+    float normRating = (float)lastRating / 32768.0f;
 
-        // Нормализация рейтинга [-32k, +32k] -> [-1.0, 1.0]
-        float normRating = (float)node->rating / 32768.0f;
+    // Указываем нейросети: для этой клетки (lastMove) правильный рейтинг - normRating
+    targetRatings[0][(int)lastMove] = normRating;
+    mask[0][(int)lastMove] = true;
 
-        targetRatings[0][(int)move] = normRating;
-        mask[0][(int)move] = true;
-    }
-
+    // 4. Проход обучения
     optimizer->zero_grad();
-    auto output = model->forward(input);
+    auto output = model->forward(input); // выход нейросети (225 значений tanh)
 
-    // Считаем ошибку (MSE) только для тех ходов, которые были в childs
+    // Считаем ошибку только для ОДНОЙ клетки, про которую мы точно знаем рейтинг
     auto loss = torch::mse_loss(output.index({mask}), targetRatings.index({mask}));
 
     loss.backward();
     optimizer->step();
 
-    // Периодическое сохранение
+    // 5. Периодическое сохранение
     static int iter = 0;
-    if (++iter % 20 == 0) {
+    if (++iter % 30 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
-            std::cout << "[AI] Модель успешно сохранена. loss = " << loss << std::endl;
+            std::cout << "[AI] Модель сохранена. ХэшХ " << current()->node->hashCodeX
+                      << " ХэшO " << current()->node->hashCodeO
+                      << " Ход: " << (int)lastMove
+                      << " | Рейтинг: " << lastRating
+                      << " | Loss: " << loss.item<float>() << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
         }
     }
 }
+
 
 int Builder::moveNeuro() {
     TMove move = predictBestMove();
