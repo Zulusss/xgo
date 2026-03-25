@@ -262,7 +262,10 @@ void Builder::trainNetworkOnCurrentPosition() {
 
 int Builder::moveNeuro() {
     TMove move = predictBestMove();
+    std::cout << "[AI] best move = " << (int)move << std::endl;
     TNode* n = getChild(current()->node, move);
+    if (n == NULL) return 0;
+    std::cout << "[AI] best move node rating = " << n->rating << std::endl;
     forward(move, n);
     return n->rating;
 }
