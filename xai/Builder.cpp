@@ -110,7 +110,7 @@ void Builder::buildTree() {
   while(count>count0) {
     back();
     // Обучаем, если позиция достаточно изучена
-    if (count > 1 && current()->node->totalChilds >= 10000) { // && current()->node->totalChilds <= 10000 + added) {
+    if (count > 1 && current()->node->totalChilds >= 10000 && current()->node->totalChilds <= 10000 + added*8) {
         //std::cout << "[AI] added = " << added << std::endl;
         trainNetworkOnCurrentPosition();
     }
@@ -236,7 +236,7 @@ void Builder::trainNetworkOnCurrentPosition() {
     auto mask = torch::zeros({1, 225}, torch::kBool);
 
     // Нормализация рейтинга [-32768, 32767] -> [-1.0, 1.0]
-    float normRating = (float)lastRating / 32768.0f;
+    float normRating = (float)((lastRating+32768) / 65536.0f);
 
     // Указываем нейросети: для этой клетки (lastMove) правильный рейтинг - normRating
     targetRatings[0][(int)lastMove] = normRating;
@@ -260,7 +260,7 @@ void Builder::trainNetworkOnCurrentPosition() {
             std::cout << "[AI] Модель сохранена. ХэшХ " << current()->node->hashCodeX
                       << " ХэшO " << current()->node->hashCodeO
                       << " Ход: " << (int)lastMove
-                      << " | Рейтинг: " << lastRating
+                      << " | Рейтинг: " << normRating
                       << " | Loss: " << loss.item<float>() << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
