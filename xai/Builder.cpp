@@ -101,7 +101,15 @@ void Builder::buildTree() {
     cur = current();
   }
 
+    int oldTotal = cur->node->totalChilds;
+
   expand(0, cur->node);
+
+    // Обучаем, если позиция достаточно изучена
+    if (cur->node->totalChilds > 10000 && oldTotal <= 10000) {
+        trainNetworkOnCurrentPosition();
+    }
+
 
   while(count>count0) back();
 
@@ -151,27 +159,6 @@ void Builder::buildTree() {
 int Builder::chooseNodeToExpand() {
     calculateChilds();
     if (childs.count == 0) return -1;
-
-    // Обучаем, если позиция достаточно изучена
-    if (current()->node->totalChilds > 10000) {
-        trainNetworkOnCurrentPosition();
-
-        // Статический счетчик для сохранения
-        static int saveCounter = 0;
-        saveCounter++;
-
-         //std::cout << saveCounter  << std::endl;
-        // Сохраняем каждые 500 шагов обучения
-        if (saveCounter % 500 == 0) {
-            try {
-                torch::save(model, "gomoku_model.pt");
-                std::cout << "[AI] Модель успешно сохранена." << std::endl;
-            } catch (const std::exception& e) {
-                std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
-            }
-        }
-    }
-
 
     // 1. Calculate total children across all branches
     int totalAllChilds = 0; // = current()->node->totalChilds;
@@ -261,7 +248,12 @@ void Builder::trainNetworkOnCurrentPosition() {
     // Периодическое сохранение
     static int iter = 0;
     if (++iter % 1000 == 0) {
-        torch::save(model, "gomoku_model.pt");
+        try {
+            torch::save(model, "gomoku_model.pt");
+            std::cout << "[AI] Модель успешно сохранена. loss = " << loss << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
+        }
     }
 }
 
