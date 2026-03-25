@@ -28,8 +28,10 @@ struct GomokuNet : torch::nn::Module {
         x = torch::relu(conv1->forward(x));
         x = torch::relu(conv2->forward(x));
         x = torch::relu(conv3->forward(x));
-        x = x.view({x.size(0), -1}); // Выравниваем в вектор
-        return torch::log_softmax(fc->forward(x), 1); // LogSoftmax для обучения через KL-дивергенцию
+        x = x.view({x.size(0), -1});
+
+        // Используем tanh, чтобы выходы сети лежали в диапазоне [-1, 1]
+        return torch::tanh(fc->forward(x));
     }
 
     torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
@@ -228,61 +230,38 @@ torch::Tensor Builder::getTensorFromField() {
 }
 
 void Builder::trainNetworkOnCurrentPosition() {
-    // 1. Считаем общее кол-во узлов, как в вашем коде
-    int totalAllChilds = 0;
-    for (int i = 0; i < childs.count; ++i) {
-        totalAllChilds += childs.node[i]->totalChilds;
-    }
-
-    // Условие: обучаемся только на "глубоких" данных
-    if (totalAllChilds < 10000) return;
-
-    // 2. Готовим входной тензор (поле 15x15)
     torch::Tensor input = getTensorFromField();
 
-    // 3. Готовим "Эталон" (Target) для Policy-головы
-    // Мы хотим, чтобы нейронка выдавала targetPercent для каждого хода
-    auto targetProbs = torch::zeros({1, 225});
+    // Целевые значения рейтингов для всех клеток (по умолчанию 0.0)
+    auto targetRatings = torch::zeros({1, 225});
+
+    // Маска: обучаем только те клетки, которые реально обсчитал алгоритм
+    auto mask = torch::zeros({1, 225}, torch::kBool);
 
     for (int i = 0; i < childs.count; ++i) {
         TNode *node = childs.node[i];
         TMove move = childs.move[i];
 
-        // Вычисляем ранг, как в вашем алгоритме
-        int rank = 0;
-        for (int j = 0; j < childs.count; ++j) {
-            if (childs.node[j]->rating > node->rating) rank++;
-        }
+        // Нормализация рейтинга [-32k, +32k] -> [-1.0, 1.0]
+        float normRating = (float)node->rating / 32768.0f;
 
-        // Целевая вероятность на основе вашего targetPercent
-        float targetPercent = 1.0f / (float)(1 << (rank + 1));
-        targetProbs[0][(int)move] = targetPercent;
+        targetRatings[0][(int)move] = normRating;
+        mask[0][(int)move] = true;
     }
 
-    // 4. Шаг оптимизации
     optimizer->zero_grad();
-    auto output = model->forward(input); // LogSoftmax на выходе
+    auto output = model->forward(input);
 
-    // Используем KL-дивергенцию (стандарт для обучения вероятностям)
-    auto loss = torch::nn::functional::kl_div(
-        output,
-        targetProbs,
-        torch::nn::functional::KLDivFuncOptions().reduction(torch::kBatchMean)
-    );
+    // Считаем ошибку (MSE) только для тех ходов, которые были в childs
+    auto loss = torch::mse_loss(output.index({mask}), targetRatings.index({mask}));
 
     loss.backward();
     optimizer->step();
 
-    //вывод
-    static float runningLoss = 0;
-    static int stepCount = 0;
-    runningLoss += loss.item<float>();
-    stepCount++;
-
-    if (stepCount % 100 == 0) {
-        std::cout << "[AI Training] Шаг: " << stepCount
-                  << " | Ошибка (Loss): " << runningLoss / 100.0f << std::endl;
-        runningLoss = 0;
+    // Периодическое сохранение
+    static int iter = 0;
+    if (++iter % 1000 == 0) {
+        torch::save(model, "gomoku_model.pt");
     }
 }
 
@@ -314,3 +293,14 @@ TMove Builder::predictBestMove() {
     return (TMove)bestMoveIdx;
 }
 
+TRating Builder::getNNRating(TMove move) {
+    torch::NoGradGuard no_grad;
+    model->eval();
+
+    auto output = model->forward(getTensorFromField());
+    float normVal = output[0][(int)move].item<float>();
+
+    model->train();
+    // Возвращаем в ваш масштаб
+    return (TRating)(normVal * 32768.0f);
+}

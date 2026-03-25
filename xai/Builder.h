@@ -30,6 +30,7 @@ protected:
 
 private:
     int chooseNodeToExpand();
+    TRating getNNRating(TMove move);
 };
 
 #endif
