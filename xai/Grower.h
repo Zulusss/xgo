@@ -16,6 +16,7 @@ public:
         void restartClick();
         void takeBackClick();
         void moveClick();
+        void moveNeuroClick();
 
         char* getMsg1();
         char* getMsg2();
@@ -38,6 +39,7 @@ private:
         bool takeBackRequested;
         bool exitRequested;
         bool moveRequested;
+        bool moveNeuroRequested;
 
         int movesCount;
 

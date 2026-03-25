@@ -39,6 +39,11 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 		board.ForceNextMove()
 	})
 
+	// Добавляем кнопку Force Move Neuro
+	forceMoveNeuro := widget.NewButtonWithIcon("Force Move Neuro", theme.MediaPlayIcon(), func() {
+		board.ForceNextMoveNeuro()
+	})
+
     // Добавляем кнопку отмены хода (Take Back)
 	takeBack := widget.NewButtonWithIcon("Take Back", theme.ContentUndoIcon(), func() {
 		for _, obj := range grid.Objects {
@@ -50,7 +55,7 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 	})
 
 	// Объединяем все три кнопки в один ряд
-	buttons := container.NewHBox(reset, forceMove, takeBack)
+	buttons := container.NewHBox(reset, forceMove, takeBack, forceMoveNeuro)
 
 	board.Reset(true)
 

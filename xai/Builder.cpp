@@ -285,3 +285,32 @@ void Builder::trainNetworkOnCurrentPosition() {
         runningLoss = 0;
     }
 }
+
+int Builder::moveNeuro() {
+    TMove move = predictBestMove();
+    TNode* n = getChild(current()->node, move);
+    forward(move, n);
+    return n->rating;
+}
+
+TMove Builder::predictBestMove() {
+    // 1. Включаем режим оценки (отключает градиенты и дропаут для скорости)
+    torch::NoGradGuard no_grad;
+    model->eval();
+
+    // 2. Превращаем текущее поле kl в тензор
+    torch::Tensor input = getTensorFromField();
+
+    // 3. Прогоняем через сеть
+    torch::Tensor output = model->forward(input);
+
+    // 4. Находим индекс самого вероятного хода
+    // argmax вернет индекс нейрона с максимальным значением
+    int64_t bestMoveIdx = output.argmax(1).item<int64_t>();
+
+    // Возвращаем режим обучения обратно
+    model->train();
+
+    return (TMove)bestMoveIdx;
+}
+

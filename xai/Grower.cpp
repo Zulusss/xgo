@@ -132,15 +132,16 @@ void Grower::grow() {
                 }
                 userMoveRequested = 255;
 
-        } else if (moveRequested &&
+        } else if (moveNeuroRequested || moveRequested &&
                 (wizardMode || lastMove()->totalChilds >= childPerMove
                         || lastMove()->rating < -20000
                         || lastMove()->rating > 20000
                         || lastMove()->totalDirectChilds == 1)) {
 
+          resultRecieved = moveNeuroRequested ? moveNeuro() : move();
+          moveNeuroRequested = false;
           moveRequested = false;
           flowRating = currRating;
-          resultRecieved = move();
           childs0 = lastMove()->totalChilds;
           currRating = lastMove()->rating;
         } else if (takeBackRequested) {
@@ -317,6 +318,11 @@ int Grower::getRResult(){
 void Grower::moveClick() {
 
     moveRequested = true;
+}
+
+void Grower::moveNeuroClick() {
+
+    moveNeuroRequested = true;
 }
 
 void Grower::restartClick() {

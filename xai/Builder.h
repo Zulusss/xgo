@@ -17,12 +17,16 @@ public:
     Builder(SimplyNumbers*, Hashtable*, int gameMode );
     void buildTree();
     void trainNetworkOnCurrentPosition();
+    int moveNeuro();
 
 protected:
     // 2. Указатели на нейросеть и оптимизатор
     std::shared_ptr<GomokuNet> model;
     std::unique_ptr<torch::optim::Adam> optimizer;
     torch::Tensor getTensorFromField();
+
+    TMove predictBestMove();
+
 
 private:
     int chooseNodeToExpand();

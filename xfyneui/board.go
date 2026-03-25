@@ -66,6 +66,10 @@ func (b *board) ForceNextMove() {
     b.gb.MoveClick()
 }
 
+func (b *board) ForceNextMoveNeuro() {
+    b.gb.MoveNeuroClick()
+}
+
 func (b *board) TakeBack() {
 
     b.gb.TakeBackClick()
