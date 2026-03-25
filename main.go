@@ -1,13 +1,15 @@
-/*
-#cgo CXXFLAGS: -std=c++11
-#cgo LDFLAGS: -lstdc++
-*/
 //go:generate fyne bundle -o data.go Icon.png
 
 package main
 
+/*
+#cgo CXXFLAGS: -std=c++17
+#cgo LDFLAGS: -ltorch -ltorch_cpu -lc10 -lstdc++
+*/
+import "C"
+
 import (
-	"C"
+    "os"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -37,6 +39,8 @@ var appx = appInfo{
 }
 
 func main() {
+    os.Setenv("TORCH_CPP_LOG_LEVEL", "ERROR")
+
 	a := app.New()
 	a.SetIcon(resourceIconPng)
 

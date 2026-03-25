@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 #include <iostream>
+#include <fstream>
 
 #pragma hdrstop
 
@@ -9,10 +10,64 @@
 
 #pragma package(smart_init)
 
+
+// Архитектура сети
+struct GomokuNet : torch::nn::Module {
+    GomokuNet() {
+        // Слой 1: Вход 1 канал (ваше поле), выход 32 фильтра. Окно 3x3.
+        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(1, 32, 3).padding(1)));
+        // Слой 2: Ищем более сложные паттерны (вилки)
+        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(32, 64, 3).padding(1)));
+        // Слой 3: Финальный сбор признаков
+        conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)));
+        // Выход: 225 нейронов (по одному на каждую клетку поля 15x15)
+        fc = register_module("fc", torch::nn::Linear(64 * 15 * 15, 225));
+    }
+
+    torch::Tensor forward(torch::Tensor x) {
+        x = torch::relu(conv1->forward(x));
+        x = torch::relu(conv2->forward(x));
+        x = torch::relu(conv3->forward(x));
+        x = x.view({x.size(0), -1}); // Выравниваем в вектор
+        return torch::log_softmax(fc->forward(x), 1); // LogSoftmax для обучения через KL-дивергенцию
+    }
+
+    torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
+    torch::nn::Linear fc{nullptr};
+};
+
 Builder::Builder(SimplyNumbers* s, Hashtable* h, int gameMode)
         : Expander(s, h){
 
+    // 1. Отключаем использование NNPACK для всех операций
+    at::set_num_threads(1); // Для 15x15 одного потока за глаза, это уберет лишние проверки CPU
+
+    // 2. Глобальный флаг отключения оптимизаций, вызывающих NNPACK
+    // (актуально для сверточных сетей на CPU)
+    torch::set_num_threads(1);
+
     this->gameMode = gameMode;
+
+    model = std::make_shared<GomokuNet>();
+    optimizer = std::make_unique<torch::optim::Adam>(model->parameters(), torch::optim::AdamOptions(1e-3));
+
+    // Создаем тензор 3x3 (как маленькое поле 5-в-ряд)
+    //torch::Tensor tensor = torch::eye(3);
+    //std::cout << "LibTorch говорит привет! Матрица 3x3:\n" << tensor << std::endl;
+
+    // Пытаемся загрузить существующую модель
+    std::ifstream file("gomoku_model.pt");
+    if (file.good()) {
+        try {
+            torch::load(model, "gomoku_model.pt");
+            std::cout << "[AI] Загружена обученная модель из файла." << std::endl;
+        } catch (...) {
+            std::cout << "[AI] Файл модели поврежден, начинаем обучение с нуля." << std::endl;
+        }
+    } else {
+        std::cout << "[AI] Файл модели не найден, создана новая сеть." << std::endl;
+    }
+
 };
 
 
@@ -92,9 +147,29 @@ void Builder::buildTree() {
 
 
 int Builder::chooseNodeToExpand() {
-
     calculateChilds();
     if (childs.count == 0) return -1;
+
+    // Обучаем, если позиция достаточно изучена
+    if (current()->node->totalChilds > 10000) {
+        trainNetworkOnCurrentPosition();
+
+        // Статический счетчик для сохранения
+        static int saveCounter = 0;
+        saveCounter++;
+
+         //std::cout << saveCounter  << std::endl;
+        // Сохраняем каждые 500 шагов обучения
+        if (saveCounter % 500 == 0) {
+            try {
+                torch::save(model, "gomoku_model.pt");
+                std::cout << "[AI] Модель успешно сохранена." << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
+            }
+        }
+    }
+
 
     // 1. Calculate total children across all branches
     int totalAllChilds = 0; // = current()->node->totalChilds;
@@ -138,3 +213,75 @@ int Builder::chooseNodeToExpand() {
 
 //==================================================================
 
+// Реализация метода подготовки данных (теперь он видит тип torch::Tensor)
+torch::Tensor Builder::getTensorFromField() {
+    auto options = torch::TensorOptions().dtype(torch::kFloat32);
+    auto t = torch::zeros({1, 1, 15, 15}, options);
+    float* data = t.data_ptr<float>();
+
+    for (int i = 0; i < 225; ++i) {
+        if (kl[i] == 1) data[i] = 1.0f;
+        else if (kl[i] == 2) data[i] = -1.0f;
+        else data[i] = 0.0f;
+    }
+    return t;
+}
+
+void Builder::trainNetworkOnCurrentPosition() {
+    // 1. Считаем общее кол-во узлов, как в вашем коде
+    int totalAllChilds = 0;
+    for (int i = 0; i < childs.count; ++i) {
+        totalAllChilds += childs.node[i]->totalChilds;
+    }
+
+    // Условие: обучаемся только на "глубоких" данных
+    if (totalAllChilds < 10000) return;
+
+    // 2. Готовим входной тензор (поле 15x15)
+    torch::Tensor input = getTensorFromField();
+
+    // 3. Готовим "Эталон" (Target) для Policy-головы
+    // Мы хотим, чтобы нейронка выдавала targetPercent для каждого хода
+    auto targetProbs = torch::zeros({1, 225});
+
+    for (int i = 0; i < childs.count; ++i) {
+        TNode *node = childs.node[i];
+        TMove move = childs.move[i];
+
+        // Вычисляем ранг, как в вашем алгоритме
+        int rank = 0;
+        for (int j = 0; j < childs.count; ++j) {
+            if (childs.node[j]->rating > node->rating) rank++;
+        }
+
+        // Целевая вероятность на основе вашего targetPercent
+        float targetPercent = 1.0f / (float)(1 << (rank + 1));
+        targetProbs[0][(int)move] = targetPercent;
+    }
+
+    // 4. Шаг оптимизации
+    optimizer->zero_grad();
+    auto output = model->forward(input); // LogSoftmax на выходе
+
+    // Используем KL-дивергенцию (стандарт для обучения вероятностям)
+    auto loss = torch::nn::functional::kl_div(
+        output,
+        targetProbs,
+        torch::nn::functional::KLDivFuncOptions().reduction(torch::kBatchMean)
+    );
+
+    loss.backward();
+    optimizer->step();
+
+    //вывод
+    static float runningLoss = 0;
+    static int stepCount = 0;
+    runningLoss += loss.item<float>();
+    stepCount++;
+
+    if (stepCount % 100 == 0) {
+        std::cout << "[AI Training] Шаг: " << stepCount
+                  << " | Ошибка (Loss): " << runningLoss / 100.0f << std::endl;
+        runningLoss = 0;
+    }
+}
