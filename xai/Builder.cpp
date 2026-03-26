@@ -51,10 +51,24 @@ void Builder::buildTree() {
 
     int added = cur->node->totalChilds;
 
+  TMove critical;
+  TRating cr;
   while(count>count0) {
+
+    TNode *n = current()->node;
+
+    critical = n->rating < -CULL_RATING1 || n->rating > CULL_RATING1
+        ? current()->move
+        : 0;
+
     back();
+
+    if (critical)
+        trainNetworkOnSingleMove(critical, n->rating);
+
+    n = current()->node;
     // Обучаем, если позиция достаточно изучена
-    if (count > 1 && current()->node->totalChilds >= 10000 && current()->node->totalChilds <= 10000 + added*8) {
+    if (critical == 0 && count > 0 && n->totalChilds >= 10000 && (count > 5 || n->totalChilds < 10100)) {
         //std::cout << "[AI] added = " << added << std::endl;
         trainNetworkOnCurrentPosition();
     }

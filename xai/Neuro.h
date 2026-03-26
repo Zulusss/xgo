@@ -16,6 +16,7 @@ class Neuro : public GameBoard {
 public:
     Neuro(SimplyNumbers *simplyGen, Hashtable *movesHash, int gameMode);
     void trainNetworkOnCurrentPosition();
+    void trainNetworkOnSingleMove(TMove move, TRating rating);
     int moveNeuro();
 
 protected:

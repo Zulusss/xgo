@@ -10,6 +10,7 @@ public:
     void buildTree();
 
     virtual void trainNetworkOnCurrentPosition(){};
+    virtual void trainNetworkOnSingleMove(TMove move, TRating rating){};
 
 private:
     int chooseNodeToExpand();

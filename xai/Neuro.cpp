@@ -122,9 +122,11 @@ void Neuro::trainNetworkOnCurrentPosition() {
     if (++iter % 30 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
+            TNode *n = current()->node;
             std::cout << "[AI] Модель сохранена. Ходов " << count
-                      << " ХэшХ " << current()->node->hashCodeX
-                      << " ХэшO " << current()->node->hashCodeO
+                      << " ХэшХ " << n->hashCodeX
+                      << " ХэшO " << n->hashCodeO
+                      << " Rating " << n->rating
                       //<< " Ход: " << (int)lastMove
                       //<< " | Рейтинг: " << normRating
                       << " | Loss: " << loss.item<float>() << std::endl;
@@ -133,6 +135,40 @@ void Neuro::trainNetworkOnCurrentPosition() {
         }
     }
 };
+
+void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
+    torch::Tensor input = getTensorFromField();
+
+    // 1. Получаем текущее предсказание сети (чтобы не менять остальные 224 клетки)
+    model->eval(); // Временно выключаем дропаут
+    torch::Tensor currentOutput;
+    {
+        torch::NoGradGuard no_grad;
+        currentOutput = model->forward(input).clone();
+    }
+    model->train();
+
+    // 2. Создаем Target: оставляем всё как есть, кроме целевого хода
+    auto target = currentOutput;
+    float normRating = (float)rating / 32768.0f;
+    target[0][(int)move] = normRating;
+
+    // 3. Шаг обучения
+    optimizer->zero_grad();
+    auto output = model->forward(input);
+
+    // Считаем ошибку MSE
+    auto loss = torch::mse_loss(output, target);
+    loss.backward();
+    optimizer->step();
+
+    // лог
+    static int iter = 0;
+    if (++iter % 200 == 0) {
+        std::cout << "[AI] Точечное обучение: Ходов " << (int)count
+                  << " | Новый рейтинг: " << rating << std::endl;
+    }
+}
 
 
 int Neuro::moveNeuro() {
