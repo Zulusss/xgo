@@ -34,6 +34,9 @@ protected:
         int resultRecieved;
 
 private:
+        int neuroWinsCount = 0;
+        int regularWinsCount = 0;
+        int drawsCount = 0;
 
         bool restartRequested;
         bool takeBackRequested;

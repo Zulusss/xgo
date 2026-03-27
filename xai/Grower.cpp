@@ -118,30 +118,63 @@ void Grower::grow() {
                 maxChilds = childPerMove;
         }
 
-        //!!! NEURO vs Comp AUTOPLAY CODE BEGINS
+        //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
         IF_TRAIN_READY {
-            if (this->count > 17 || std::abs(lastMove()->rating) > 7200 && this->count > 1) {
-                restartRequested = true;
-                neuroPlaysO = !neuroPlaysO;
-                std::cout << "Requested restart" << std::endl;
-            }
-            else if (lastMove()->totalChilds > childPerMove) {
-                if (neuroPlaysO == (this->count%2)) {
-                    moveNeuroRequested = true;
-                    std::cout << "Requested neuro move "
-                        << (this->count%2?"(O)":"(X)")
-                        << std::endl;
+            float lastRating = lastMove()->rating;
+            bool isWin = std::abs(lastRating) > 8000;
 
+            // Условие перезапуска: победный рейтинг или лимит ходов
+            if (this->count > 17 || (isWin && this->count > 1)) {
+                restartRequested = true;
+
+                if (!isWin) {
+                    std::cout << "[RESTART] Reason: DRAW" << std::endl;
+                    drawsCount++;
                 } else {
 
+                    // Определяем, была ли нейросеть тем, кто сделал последний ход
+                    bool neuroMovedLast = (neuroPlaysO == (this->count % 2 == 0));
+
+                    // Нейросеть победила, если:
+                    // 1. Она ходила последней и рейтинг положительный (она создала победную ситуацию)
+                    // 2. Она НЕ ходила последней и рейтинг отрицательный (соперник подставился)
+                    bool neuroWon = (neuroMovedLast == (lastRating > 0));
+
+                    if (neuroWon) {
+                        std::cout << "[RESTART] Reason: NEURO WON (Rating: " << lastRating
+                            //<< " neuroPlaysO: " << neuroPlaysO
+                            //<< " neuroMovedLast: " << neuroMovedLast
+                            << ")" << std::endl;
+                        neuroWinsCount++;
+                    } else {
+                        std::cout << "[RESTART] Reason: LEGACY WON (Rating: " << lastRating << ")" << std::endl;
+                        regularWinsCount++;
+                    }
+                }
+
+                // Вывод счета при каждом рестарте
+                std::cout << "CURRENT SCORE -> Neuro: " << neuroWinsCount
+                          << " | Regular: " << regularWinsCount
+                          << " | Draws: " << drawsCount << std::endl;
+
+                // Смена ролей и сброс
+                neuroPlaysO = !neuroPlaysO;
+                std::cout << "Requested restart. Neuro next: " << (neuroPlaysO ? "O" : "X") << std::endl;
+            }
+            else if (lastMove()->totalChilds > childPerMove) {
+                // Выбор следующего игрока:
+                // Если count=0 (ход X) и neuroPlaysO=false — ходит нейросеть
+                if (neuroPlaysO == (this->count % 2 != 0)) {
+                    moveNeuroRequested = true;
+                    std::cout << "Requested neuro move" << std::endl;
+                } else {
                     moveRequested = true;
-                    std::cout << "Requested regular move "
-                        << (this->count%2?"(O)":"(X)")
-                        << std::endl;
+                    std::cout << "Requested regular move" << std::endl;
                 }
             }
         }
-        //!!! NEURO AUTOPLAY CODE ENDS
+        //================= !!! NEURO AUTOPLAY CODE ENDS =======================
+
 
         //********* STEP 2   process requested actions ***************
         if (restartRequested) {

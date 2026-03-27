@@ -129,7 +129,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // лог
     static int iter = 0;
-    if (++iter % 25 == 0) {
+    if (++iter % 50 == 0) {
         TNode *n = current()->node;
         std::cout << "[AI] Полевое обучение: Ходов " << (int)count
           << " ХэшХ " << n->hashCodeX
@@ -145,7 +145,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 void Neuro::save(torch::Tensor loss) {
 
     static int iter = 0;
-    if (++iter % 300 == 0) {
+    if (++iter % 500 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
             TNode *n = current()->node;
@@ -165,7 +165,7 @@ void Neuro::save(torch::Tensor loss) {
 void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
     ++trainedSingleCount;
-    if (!(trainedSingleCount%4)) return;
+    if (!(trainedSingleCount%8)) return;
 
     torch::Tensor input = getTensorFromField();
 
@@ -194,7 +194,7 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
     // лог
     static int iter = 0;
-    if (++iter % 500 == 0) {
+    if (++iter % 1000 == 0) {
         std::cout << "[AI] Точечное обучение: Ходов " << (int)count
                   << " | Новый рейтинг: " << rating
                   << " | Loss: " << loss.item<float>() << std::endl;
@@ -211,12 +211,13 @@ int Neuro::moveNeuro() {
         std::cout << "cell is already occupied " << move << std::endl;
         return 0;
     }
-    std::cout << "[AI] best move = " << (int)move << std::endl;
     put(move);
     //TNode* n = getChild(current()->node, move);
     //if (n == NULL) return 0;
     int rat = current()->node->rating;
-    std::cout << "[AI] best move node rating = " << rat << std::endl;
+    std::cout << "[AI] best move "
+        << (int)move
+        << " node rating = " << rat << std::endl;
     //forward(move, n);
     return rat;
 };
