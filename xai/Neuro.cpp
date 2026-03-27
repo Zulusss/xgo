@@ -149,13 +149,15 @@ void Neuro::save(torch::Tensor loss) {
         try {
             torch::save(model, "gomoku_model.pt");
             TNode *n = current()->node;
-            std::cout << "[AI] Модель сохранена. Ходов " << count
-                      << " ХэшХ " << n->hashCodeX
-                      << " ХэшO " << n->hashCodeO
-                      << " Rating " << n->rating
-                      //<< " Ход: " << (int)lastMove
-                      //<< " | Рейтинг: " << normRating
-                      << " | Loss: " << loss.item<float>() << std::endl;
+            if (++iter % 2000 == 0) {
+                std::cout << "[AI] Модель сохранена. Ходов " << count
+                  << " ХэшХ " << n->hashCodeX
+                  << " ХэшO " << n->hashCodeO
+                  << " Rating " << n->rating
+                  //<< " Ход: " << (int)lastMove
+                  //<< " | Рейтинг: " << normRating
+                  << " | Loss: " << loss.item<float>() << std::endl;
+            }
         } catch (const std::exception& e) {
             std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
         }
@@ -164,8 +166,8 @@ void Neuro::save(torch::Tensor loss) {
 
 void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
-    ++trainedSingleCount;
-    if (!(trainedSingleCount%8)) return;
+    static int iter = 0;
+    if (++iter % 5 != 0) return;
 
     torch::Tensor input = getTensorFromField();
 
@@ -193,8 +195,8 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
     optimizer->step();
 
     // лог
-    static int iter = 0;
-    if (++iter % 1000 == 0) {
+    ++trainedSingleCount;
+    if (trainedSingleCount % 2000 == 0) {
         std::cout << "[AI] Точечное обучение: Ходов " << (int)count
                   << " | Новый рейтинг: " << rating
                   << " | Loss: " << loss.item<float>() << std::endl;
@@ -207,14 +209,37 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
 int Neuro::moveNeuro() {
     TMove move = predictBestMove();
-    if (kl[move] > 1) {
-        std::cout << "cell is already occupied " << move << std::endl;
-        return 0;
-    }
+    TNode* node = current()->node;
+    //std::cout << "1111" << std::endl;
+    do {
+        if (kl[move] > 1) {
+            std::cout << "cell is already occupied " << move << std::endl;
+            return 0;
+        }
+
+        TNode* child = getChild(node, move);
+        //std::cout << "2222" << std::endl;
+
+        if (child != NULL && child->rating < 6200) {
+            //std::cout << "3333" << std::endl;
+            trainNetworkOnSingleMove(move, child->rating);
+            TMove move1 = predictBestMove();
+            //std::cout << "44444" << std::endl;
+            if (move1 != move) {
+                std::cout << "predicted cell changed " << move << " -> " << move1 << std::endl;
+                move = move1;
+                continue;
+            }
+        }
+        //std::cout << "2bbb" << std::endl;
+        break;
+    } while(true);
+    //std::cout << "5555" << std::endl;
+
     put(move);
     //TNode* n = getChild(current()->node, move);
     //if (n == NULL) return 0;
-    int rat = current()->node->rating;
+    int rat = node->rating;
     std::cout << "[AI] best move "
         << (int)move
         << " node rating = " << rat << std::endl;

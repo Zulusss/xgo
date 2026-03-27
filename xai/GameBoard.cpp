@@ -61,8 +61,8 @@ bool GameBoard::put(TMove N) {
     }
 
 
-    logger->log("x", x);
-    logger->log("y", y);
+    //logger->log("x", x);
+    //logger->log("y", y);
 
     bool ret = forward((y+7)*15+(x+7));
     if (!ret) {

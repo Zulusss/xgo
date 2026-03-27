@@ -49,31 +49,7 @@ void Builder::buildTree() {
 
   int added = cur->node->totalChilds;
 
-  TMove critical;
-  TRating cr;
-  while(count>count0) {
-
-    IF_TRAIN_READY { // Train neural network if we are prepared enough
-        TNode *n = current()->node;
-        critical = std::abs(n->rating) > 8000 ? current()->move : 0;
-
-        back();
-
-        if (critical)
-            trainNetworkOnSingleMove(critical, n->rating);
-
-        n = current()->node;
-        // Обучаем, если позиция достаточно изучена
-        if (critical == 0 && count > 0 && n->totalChilds >= 10000) {
-            //std::cout << "[AI] added = " << added << std::endl;
-            trainNetworkOnCurrentPosition();
-        }
-    }
-    else {
-
-        back();
-    }
-  }
+  goBack(count0);
 
   building = false;
 
@@ -92,6 +68,30 @@ void Builder::buildTree() {
   */
   //assert cursor==lastmove;
 };
+
+
+void Builder::goBack(int count0) {
+  TMove critical;
+  TRating cr;
+  while(count>count0) {
+    IF_TRAIN_READY { // Train neural network if we are prepared enough
+        TNode *n = current()->node;
+        critical = std::abs(n->rating) > 8000 ? current()->move : 0;
+        back();
+        if (critical)
+            trainNetworkOnSingleMove(critical, n->rating);
+        n = current()->node;
+        // Обучаем, если позиция достаточно изучена
+        if (critical == 0 && count > 0 && n->totalChilds >= 10000) {
+            //std::cout << "[AI] added = " << added << std::endl;
+            trainNetworkOnCurrentPosition();
+        }
+    }
+    else {
+        back();
+    }
+  }
+}
 
 //==================================================================
 

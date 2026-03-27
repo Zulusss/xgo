@@ -141,13 +141,19 @@ void Grower::grow() {
                     bool neuroWon = (neuroMovedLast == (lastRating > 0));
 
                     if (neuroWon) {
-                        std::cout << "[RESTART] Reason: NEURO WON (Rating: " << lastRating
+                        std::cout << "[RESTART] Reason: NEURO WON ("
+                            << (neuroPlaysO ? "O" : "X")
+                            << " Rating: "
+                            << lastRating
                             //<< " neuroPlaysO: " << neuroPlaysO
                             //<< " neuroMovedLast: " << neuroMovedLast
                             << ")" << std::endl;
                         neuroWinsCount++;
                     } else {
-                        std::cout << "[RESTART] Reason: LEGACY WON (Rating: " << lastRating << ")" << std::endl;
+                        std::cout << "[RESTART] Reason: LEGACY WON ("
+                            << (neuroPlaysO ? "X" : "O")
+                            << " Rating: "
+                            << lastRating << ")" << std::endl;
                         regularWinsCount++;
                     }
                 }
@@ -166,10 +172,11 @@ void Grower::grow() {
                 // Если count=0 (ход X) и neuroPlaysO=false — ходит нейросеть
                 if (neuroPlaysO == (this->count % 2 != 0)) {
                     moveNeuroRequested = true;
-                    std::cout << "Requested neuro move" << std::endl;
+                    //std::cout << "Requested neuro move " << (this->count%2?"(O)":"(X)") << std::endl;
+
                 } else {
                     moveRequested = true;
-                    std::cout << "Requested regular move" << std::endl;
+                    //std::cout << "Requested legacy move " << (this->count%2?"(O)":"(X)") << std::endl;
                 }
             }
         }
@@ -179,7 +186,8 @@ void Grower::grow() {
         //********* STEP 2   process requested actions ***************
         if (restartRequested) {
             restartRequested = false;
-            restart();
+            //restart();
+            goBack(1);
             std::cout << "restarted" << std::endl;
         } else if (userMoveRequested != 255) {
                 int i;
