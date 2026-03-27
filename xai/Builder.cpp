@@ -53,19 +53,25 @@ void Builder::buildTree() {
   TRating cr;
   while(count>count0) {
 
-    TNode *n = current()->node;
-    critical = std::abs(n->rating) > 8000 ? current()->move : 0;
+    IF_TRAIN_READY { // Train neural network if we are prepared enough
+        TNode *n = current()->node;
+        critical = std::abs(n->rating) > 8000 ? current()->move : 0;
 
-    back();
+        back();
 
-    if (critical)
-        trainNetworkOnSingleMove(critical, n->rating);
+        if (critical)
+            trainNetworkOnSingleMove(critical, n->rating);
 
-    n = current()->node;
-    // Обучаем, если позиция достаточно изучена
-    if (critical == 0 && count > 0 && n->totalChilds >= 10000 && n->totalChilds < 10200) {
-        //std::cout << "[AI] added = " << added << std::endl;
-        trainNetworkOnCurrentPosition();
+        n = current()->node;
+        // Обучаем, если позиция достаточно изучена
+        if (critical == 0 && count > 0 && n->totalChilds >= 10000 && n->totalChilds < 10200) {
+            //std::cout << "[AI] added = " << added << std::endl;
+            trainNetworkOnCurrentPosition();
+        }
+    }
+    else {
+
+        back();
     }
   }
 

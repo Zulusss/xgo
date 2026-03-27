@@ -119,20 +119,22 @@ void Grower::grow() {
         }
 
         //!!! NEURO vs Comp AUTOPLAY CODE BEGINS
-        if (this->count > 17 || std::abs(lastMove()->rating) > 7200 && this->count > 1) {
-            restartRequested = true;
-            neuroPlaysX = !neuroPlaysX;
-            std::cout << "Requested restart" << std::endl;
-        }
-        else if (lastMove()->totalChilds > childPerMove) {
-            if (neuroPlaysX == (this->count%2==0)) {
-                moveNeuroRequested = true;
-                std::cout << "Requested neuro move" << std::endl;
+        IF_TRAIN_READY {
+            if (this->count > 17 || std::abs(lastMove()->rating) > 7200 && this->count > 1) {
+                restartRequested = true;
+                neuroPlaysX = !neuroPlaysX;
+                std::cout << "Requested restart" << std::endl;
+            }
+            else if (lastMove()->totalChilds > childPerMove) {
+                if (neuroPlaysX == (this->count%2==0)) {
+                    moveNeuroRequested = true;
+                    std::cout << "Requested neuro move" << std::endl;
 
-            } else {
+                } else {
 
-                moveRequested = true;
-                std::cout << "Requested regular move" << std::endl;
+                    moveRequested = true;
+                    std::cout << "Requested regular move" << std::endl;
+                }
             }
         }
         //!!! NEURO AUTOPLAY CODE ENDS
@@ -305,7 +307,7 @@ void Grower::grow() {
               logger->printMissStats(msg6);
 
               node->printPosition(msg7, 200);
-              node->printScores(msg8, 200, this->count);
+              node->printScores(msg8, 200, this->count, neuroPlaysX);
               //current()->printAttacks(msg9, 200);
 
 /* TODO

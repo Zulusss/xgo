@@ -4,6 +4,9 @@
 //---------------------------------------------------------------------------
 #include "Expander.h"
 
+#define TRAIN_FROM 3000000
+#define IF_TRAIN_READY if (history[0].node->totalChilds > TRAIN_FROM)
+
 class Builder : public Expander {
 public:
     Builder(SimplyNumbers*, Hashtable*, int gameMode );
