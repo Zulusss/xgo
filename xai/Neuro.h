@@ -23,6 +23,7 @@ protected:
 
     int trainedFieldCount;
     int trainedSingleCount;
+    int skipTrainFieldCount;
 
     // 2. Указатели на нейросеть и оптимизатор
     std::shared_ptr<GomokuNet> model;

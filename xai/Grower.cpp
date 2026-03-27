@@ -313,7 +313,7 @@ void Grower::grow() {
               node->printPosition(msg7, 200);
               node->printScores(msg8, 200, this->count, neuroPlaysO);
 
-              sprintf(msg9, "Trained (field/single): %d / %d", trainedFieldCount, trainedSingleCount);
+              sprintf(msg9, "Trained [field: %d, single: %d, f.skip: %d]", trainedFieldCount, trainedSingleCount, skipTrainFieldCount);
               //current()->printAttacks(msg9, 200);
 
 /* TODO

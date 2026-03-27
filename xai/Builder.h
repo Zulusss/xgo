@@ -4,7 +4,7 @@
 //---------------------------------------------------------------------------
 #include "Expander.h"
 
-#define TRAIN_FROM 3000000
+#define TRAIN_FROM 600000
 #define IF_TRAIN_READY if (history[0].node->totalChilds > TRAIN_FROM)
 
 class Builder : public Expander {

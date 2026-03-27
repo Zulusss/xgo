@@ -43,6 +43,7 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
 
     trainedFieldCount = 0;
     trainedSingleCount = 0;
+    skipTrainFieldCount = 0;
 
     // 1. Отключаем использование NNPACK для всех операций
     at::set_num_threads(1); // Для 15x15 одного потока за глаза, это уберет лишние проверки CPU
@@ -91,7 +92,13 @@ void Neuro::trainNetworkOnCurrentPosition() {
     auto targetRatings = torch::zeros({1, 225});
     auto mask = torch::full({1, 225}, true, torch::kBool); // Обучаем все 225 клеток
 
+    static TNode *prev = NULL;
     TNode *par = current()->node;
+    if (prev == par) {
+        ++skipTrainFieldCount;
+        return;
+    }
+    prev = par;
 
     // 1. Проходим по всем клеткам поля
     for (int i = 0; i < 225; ++i) {
@@ -156,6 +163,10 @@ void Neuro::save(torch::Tensor loss) {
 };
 
 void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
+
+    ++trainedSingleCount;
+    if (!(trainedSingleCount%4)) return;
+
     torch::Tensor input = getTensorFromField();
 
     // 1. Получаем текущее предсказание сети (чтобы не менять остальные 224 клетки)
@@ -190,7 +201,7 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
     }
 
     save(loss);
-    ++trainedSingleCount;
+
 }
 
 
