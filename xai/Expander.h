@@ -21,7 +21,8 @@ public:
 
 protected:
         Expander(SimplyNumbers *simplyGen, Hashtable *movesHash);
-        void expand(int start, TNode* cursor);
+        TMove expand(int start, TNode* cursor);
+        void multiExpand(TNode* cursor);
         void fullExpand(TNode* cursor);
         bool isExpected(TNode* curr, TMove i);
 

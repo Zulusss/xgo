@@ -117,6 +117,11 @@ void Neuro::trainNetworkOnCurrentPosition() {
     loss.backward();
     optimizer->step();
 
+    // лог
+    static int iter = 0;
+    if (++iter % 30 == 0) {
+        std::cout << "[AI] Полевое обучение: Ходов " << (int)count << std::endl;
+    }
     // 5. Периодическое сохранение
     save(loss);
 }

@@ -89,15 +89,27 @@ void Expander::fullExpand(TNode* cursor) {
   updateParents(created);
 }
 
+void Expander ::multiExpand(TNode* cursor) {
+    for (int i = 0; i<3; ++i) {
+
+        TMove move = expand(0, cursor);
+        if (move==255 || !forward(move)) {
+            //This is the often case!!
+            //std::cout << "connot forward to " << (int)move << std::endl;
+            return;
+        }
+        cursor = current()->node;
+    }
+}
 
 //adds childs to cursor node
-void Expander ::expand(int startPass, TNode* cursor) {
+TMove Expander::expand(int startPass, TNode* cursor) {
 
   if (cursor->rating > 32500 || cursor->rating < -32500) {
       cursor->totalChilds += 100;
       updateParents(100);
       logger->missExpand(cursor);
-      return;
+      return 255;
   }
 //  if (logger != NULL) {
 //        logger->expand(count);
@@ -107,16 +119,15 @@ void Expander ::expand(int startPass, TNode* cursor) {
   // 3. Выбор источника ходов
   MovesBucket* targetBucket = &newChilds;
   if (newChilds.count == 0) {
-    if (otherNewChilds.count == 0) return; // Оба пусты — выходим
+    if (otherNewChilds.count == 0) {
+        logger->missMoves(cursor);
+        return 255; // Оба пусты — выходим
+    }
     targetBucket = &otherNewChilds;
   }
 
-  if (targetBucket->count == 0) {
-    logger->missMoves(cursor);
-    return;
-  }
-
   TRating max_rating = -32600;
+  TMove chosen = 0;
 
   int created = 0;
   cursor->totalChilds = 0;
@@ -141,7 +152,10 @@ void Expander ::expand(int startPass, TNode* cursor) {
         }
     }
 
-    if (node->rating > max_rating) max_rating = node->rating;
+    if (node->rating > max_rating) {
+        max_rating = node->rating;
+        chosen = move;
+    }
   }
 
   short int oldRating = cursor->rating;
@@ -158,6 +172,8 @@ void Expander ::expand(int startPass, TNode* cursor) {
 //  current()->
 
   if (count > max_count) max_count = count;
+
+  return chosen;
 };
 
 //----------------------------------------------------------------------------

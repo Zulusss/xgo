@@ -116,6 +116,15 @@ void Grower::grow() {
                 maxChilds = childPerMove;
         }
 
+        //!!! NEURO AUTOPLAY CODE BEGINS
+        if (lastMove()->rating > 10000 || lastMove()->rating < -10000) {
+            restartRequested = true;
+        }
+        else if (lastMove()->totalChilds > 13000) {
+            moveNeuroRequested = true;
+        }
+        //!!! NEURO AUTOPLAY CODE ENDS
+
         //********* STEP 2   process requested actions ***************
         if (restartRequested) {
             restartRequested = false;
