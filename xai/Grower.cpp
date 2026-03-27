@@ -154,7 +154,7 @@ void Grower::grow() {
 
                 // Вывод счета при каждом рестарте
                 std::cout << "CURRENT SCORE -> Neuro: " << neuroWinsCount
-                          << " | Regular: " << regularWinsCount
+                          << " | Legacy: " << regularWinsCount
                           << " | Draws: " << drawsCount << std::endl;
 
                 // Смена ролей и сброс
