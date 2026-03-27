@@ -90,7 +90,7 @@ void Expander::fullExpand(TNode* cursor) {
 }
 
 void Expander ::multiExpand(TNode* cursor) {
-    for (int i = 0; i<3; ++i) {
+    for (int i = 0; i<5; ++i) {
 
         TMove move = expand(0, cursor);
         if (move==255 || !forward(move)) {
@@ -99,6 +99,8 @@ void Expander ::multiExpand(TNode* cursor) {
             return;
         }
         cursor = current()->node;
+        if (std::abs(cursor->rating) > 8000)
+            return;
     }
 }
 

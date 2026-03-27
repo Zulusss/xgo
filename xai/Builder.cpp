@@ -45,39 +45,30 @@ void Builder::buildTree() {
     cur = current();
   }
 
-
-
   multiExpand(cur->node);
 
-    int added = cur->node->totalChilds;
+  int added = cur->node->totalChilds;
 
   TMove critical;
   TRating cr;
   while(count>count0) {
 
-    static int iter = 0;
-    if (++iter % 4 == 0) {
+    TNode *n = current()->node;
 
-        TNode *n = current()->node;
+    critical = n->rating < -CULL_RATING1 || n->rating > CULL_RATING1
+        ? current()->move
+        : 0;
 
-        critical = n->rating < -CULL_RATING1 || n->rating > CULL_RATING1
-            ? current()->move
-            : 0;
+    back();
 
-        back();
+    if (critical)
+        trainNetworkOnSingleMove(critical, n->rating);
 
-        if (critical)
-            trainNetworkOnSingleMove(critical, n->rating);
-
-        n = current()->node;
-        // Обучаем, если позиция достаточно изучена
-        if (critical == 0 && count > 0 && n->totalChilds >= 10000 && (count > 5 || n->totalChilds < 10100)) {
-            //std::cout << "[AI] added = " << added << std::endl;
-            trainNetworkOnCurrentPosition();
-        }
-    } else {
-
-        back();
+    n = current()->node;
+    // Обучаем, если позиция достаточно изучена
+    if (critical == 0 && count > 0 && n->totalChilds >= 10000 && (count > 5 || n->totalChilds < 10100)) {
+        //std::cout << "[AI] added = " << added << std::endl;
+        trainNetworkOnCurrentPosition();
     }
   }
 
