@@ -20,7 +20,7 @@ typedef uint32_t THash;
 #define BIG_PARENT4   60000
 #define BIG_PARENT5  120000
 
-#define CULL_RATING1 6066
+#define CULL_RATING1 8000
 #define CULL_RATING2 13000
 
 //#define STORE_ATTACKS  //use to toggle attacks storing logic
@@ -90,7 +90,7 @@ typedef signed short int TRating;
       TNode *next;
 
       void printPosition(char* buffer, size_t size);
-      void printScores(char* buffer, size_t size);
+      void printScores(char* buffer, size_t size, int count);
 
     };
 

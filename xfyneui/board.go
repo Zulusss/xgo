@@ -181,6 +181,8 @@ func sync(b *board, sd *StatusController) {
 					lastMove.SetResource(theme.RadioButtonIcon())
 					b.expectO = false
 					addedCount++
+git 				} else {
+				    lastMove.Reset()
 				}
 
 				if b.humanX == (code < 0) {
@@ -214,10 +216,10 @@ func sync(b *board, sd *StatusController) {
 			b.finished = true
 		}
 
-		if b.displayedMovesCount == 225 {
-			dialog.ShowInformation("It is a tie!", "Nobody has won. Better luck next time.", fyne.CurrentApp().Driver().AllWindows()[0])
-			b.finished = true
-		}
+// 		if b.displayedMovesCount == 225 {
+// 			dialog.ShowInformation("It is a tie!", "Nobody has won. Better luck next time.", fyne.CurrentApp().Driver().AllWindows()[0])
+// 			b.finished = true
+// 		}
 		return
 	}
 }

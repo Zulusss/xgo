@@ -75,8 +75,8 @@ void TNode::printPosition(char* buffer, size_t size) {
 }
 
 // Метод 2: Счетчики x и o
-void TNode::printScores(char* buffer, size_t size) {
-    snprintf(buffer, size, "%d+%d+%d / %d+%d+%d",
+void TNode::printScores(char* buffer, size_t size, int count) {
+    snprintf(buffer, size, "%d: %d+%d+%d / %d+%d+%d", count,
              (int)o4, (int)o3, (int)o2,
              (int)x4, (int)x3, (int)x2);
 }

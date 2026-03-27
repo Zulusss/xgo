@@ -48,6 +48,8 @@ void Grower::grow() {
 
   int childs0 = 0;
   int playMode = 1;//0= Human vs Human, 1= Comp vs Human, 2= Comp vs Comp, 3= Debuts calc
+
+  bool neuroPlaysX = false;
    
 //  unsigned long beginTime = GetTickCount();
   while (!exitRequested) {
@@ -93,7 +95,7 @@ void Grower::grow() {
                 || (count < 21 && totalChilds >23000000)
                 );*/
 
-        int childPerMove = 175000;//CSpinEditChilds->Value*1000;
+        int childPerMove = 13000;//CSpinEditChilds->Value*1000;
         if (wizardMode && childs0 && childs0 >= childPerMove && childs0 < childPerMove*2) {
                 childPerMove = childs0 + 50000;
         }
@@ -116,12 +118,22 @@ void Grower::grow() {
                 maxChilds = childPerMove;
         }
 
-        //!!! NEURO AUTOPLAY CODE BEGINS
-        if (this->count > 13 || std::abs(lastMove()->rating) > 7200) {
+        //!!! NEURO vs Comp AUTOPLAY CODE BEGINS
+        if (this->count > 17 || std::abs(lastMove()->rating) > 7200 && this->count > 1) {
             restartRequested = true;
+            neuroPlaysX = !neuroPlaysX;
+            std::cout << "Requested restart" << std::endl;
         }
-        else if (lastMove()->totalChilds > 13000) {
-            moveNeuroRequested = true;
+        else if (lastMove()->totalChilds > childPerMove) {
+            if (neuroPlaysX == (this->count%2==0)) {
+                moveNeuroRequested = true;
+                std::cout << "Requested neuro move" << std::endl;
+
+            } else {
+
+                moveRequested = true;
+                std::cout << "Requested regular move" << std::endl;
+            }
         }
         //!!! NEURO AUTOPLAY CODE ENDS
 
@@ -129,6 +141,7 @@ void Grower::grow() {
         if (restartRequested) {
             restartRequested = false;
             restart();
+            std::cout << "restarted" << std::endl;
         } else if (userMoveRequested != 255) {
                 int i;
                 bool res = put(userMoveRequested);
@@ -136,7 +149,7 @@ void Grower::grow() {
                         int totl = lastMove()->totalChilds;
                         resultRecieved = lastMove()->rating;
                         if (res < 32600) {
-                            moveRequested = true;
+                            //moveRequested = true;
                         }
                 }
                 userMoveRequested = 255;
@@ -227,7 +240,7 @@ void Grower::grow() {
 
         //********* STEP 5   stat outputs ***************
 
-        if (changed || !(count%100)) {
+        if (!(count%4)) {
               int min = 1000000000;
               int max = 0;
               int decr;
@@ -292,7 +305,7 @@ void Grower::grow() {
               logger->printMissStats(msg6);
 
               node->printPosition(msg7, 200);
-              node->printScores(msg8, 200);
+              node->printScores(msg8, 200, this->count);
               //current()->printAttacks(msg9, 200);
 
 /* TODO

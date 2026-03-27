@@ -471,15 +471,15 @@ exit:
 //        ret = 6026;
         //destNode->fixedRating = true;
   //} else
-  if (destNode->age==5) {//todo recheck
-        int m1 = history[1].move;
-        int m2 = history[3].move;
-        int m3 = move;
-        if (m1/15 == m2/15 && m1/15 == m3/15 || m1%15 == m2%15 && m1%15 == m3%15) {
-          ret = -6026;
-          destNode->setFixedRating(true);
-        }
-  }
+//  if (destNode->age==5) {//todo recheck
+//        int m1 = history[1].move;
+//        int m2 = history[3].move;
+//        int m3 = move;
+//        if (m1/15 == m2/15 && m1/15 == m3/15 || m1%15 == m2%15 && m1%15 == m3%15) {
+//          ret = -6026;
+//          destNode->setFixedRating(true);
+//        }
+//  }
 //end check special cases
 
   if (destNode->isFixedRating()) {}
