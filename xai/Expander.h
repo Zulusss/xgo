@@ -6,6 +6,8 @@
 
 #include "Relator.h"
 
+#define MULTI_EXPAND_TIMES 5
+
 class MovesBucket {
         public:
         int count;

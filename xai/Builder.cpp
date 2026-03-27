@@ -66,7 +66,7 @@ void Builder::buildTree() {
 
     n = current()->node;
     // Обучаем, если позиция достаточно изучена
-    if (critical == 0 && count > 0 && n->totalChilds >= 10000 && (count > 5 || n->totalChilds < 10100)) {
+    if (critical == 0 && count > 0 && n->totalChilds >= 10000 && (count > 5 || n->totalChilds < 10200)) {
         //std::cout << "[AI] added = " << added << std::endl;
         trainNetworkOnCurrentPosition();
     }

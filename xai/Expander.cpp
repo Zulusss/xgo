@@ -90,7 +90,7 @@ void Expander::fullExpand(TNode* cursor) {
 }
 
 void Expander ::multiExpand(TNode* cursor) {
-    for (int i = 0; i<5; ++i) {
+    for (int i = 0; i<MULTI_EXPAND_TIMES; ++i) {
 
         TMove move = expand(0, cursor);
         if (move==255 || !forward(move)) {
