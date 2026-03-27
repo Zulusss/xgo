@@ -210,7 +210,6 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 int Neuro::moveNeuro() {
     TMove move = predictBestMove();
     TNode* node = current()->node;
-    //std::cout << "1111" << std::endl;
     do {
         if (kl[move] > 1) {
             std::cout << "cell is already occupied " << move << std::endl;
@@ -218,32 +217,22 @@ int Neuro::moveNeuro() {
         }
 
         TNode* child = getChild(node, move);
-        //std::cout << "2222" << std::endl;
 
         if (child != NULL && child->rating < 6200) {
-            //std::cout << "3333" << std::endl;
             trainNetworkOnSingleMove(move, child->rating);
             TMove move1 = predictBestMove();
-            //std::cout << "44444" << std::endl;
             if (move1 != move) {
                 std::cout << "predicted cell changed " << move << " -> " << move1 << std::endl;
                 move = move1;
                 continue;
             }
         }
-        //std::cout << "2bbb" << std::endl;
         break;
     } while(true);
-    //std::cout << "5555" << std::endl;
 
     put(move);
-    //TNode* n = getChild(current()->node, move);
-    //if (n == NULL) return 0;
     int rat = node->rating;
-    std::cout << "[AI] best move "
-        << (int)move
-        << " node rating = " << rat << std::endl;
-    //forward(move, n);
+    //std::cout << "[AI] best move " << (int)move << " node rating = " << rat << std::endl;
     return rat;
 };
 
