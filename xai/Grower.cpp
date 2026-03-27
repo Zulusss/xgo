@@ -49,7 +49,7 @@ void Grower::grow() {
   int childs0 = 0;
   int playMode = 1;//0= Human vs Human, 1= Comp vs Human, 2= Comp vs Comp, 3= Debuts calc
 
-  bool neuroPlaysX = false;
+  bool neuroPlaysO = false;
    
 //  unsigned long beginTime = GetTickCount();
   while (!exitRequested) {
@@ -122,11 +122,11 @@ void Grower::grow() {
         IF_TRAIN_READY {
             if (this->count > 17 || std::abs(lastMove()->rating) > 7200 && this->count > 1) {
                 restartRequested = true;
-                neuroPlaysX = !neuroPlaysX;
+                neuroPlaysO = !neuroPlaysO;
                 std::cout << "Requested restart" << std::endl;
             }
             else if (lastMove()->totalChilds > childPerMove) {
-                if (neuroPlaysX == (this->count%2==0)) {
+                if (neuroPlaysO == (this->count%2)) {
                     moveNeuroRequested = true;
                     std::cout << "Requested neuro move" << std::endl;
 
@@ -307,7 +307,7 @@ void Grower::grow() {
               logger->printMissStats(msg6);
 
               node->printPosition(msg7, 200);
-              node->printScores(msg8, 200, this->count, neuroPlaysX);
+              node->printScores(msg8, 200, this->count, neuroPlaysO);
               //current()->printAttacks(msg9, 200);
 
 /* TODO

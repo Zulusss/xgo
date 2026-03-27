@@ -119,7 +119,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // лог
     static int iter = 0;
-    if (++iter % 30 == 0) {
+    if (++iter % 25 == 0) {
         std::cout << "[AI] Полевое обучение: Ходов " << (int)count << std::endl;
     }
     // 5. Периодическое сохранение
@@ -174,7 +174,7 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
     // лог
     static int iter = 0;
-    if (++iter % 300 == 0) {
+    if (++iter % 500 == 0) {
         std::cout << "[AI] Точечное обучение: Ходов " << (int)count
                   << " | Новый рейтинг: " << rating << std::endl;
     }
