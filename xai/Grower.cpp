@@ -49,7 +49,7 @@ void Grower::grow() {
   int childs0 = 0;
   int playMode = 1;//0= Human vs Human, 1= Comp vs Human, 2= Comp vs Comp, 3= Debuts calc
 
-  bool neuroPlaysO = false;
+  bool neuroPlaysO = true;
    
 //  unsigned long beginTime = GetTickCount();
   while (!exitRequested) {
@@ -128,12 +128,16 @@ void Grower::grow() {
             else if (lastMove()->totalChilds > childPerMove) {
                 if (neuroPlaysO == (this->count%2)) {
                     moveNeuroRequested = true;
-                    std::cout << "Requested neuro move" << std::endl;
+                    std::cout << "Requested neuro move "
+                        << (this->count%2?"(O)":"(X)")
+                        << std::endl;
 
                 } else {
 
                     moveRequested = true;
-                    std::cout << "Requested regular move" << std::endl;
+                    std::cout << "Requested regular move "
+                        << (this->count%2?"(O)":"(X)")
+                        << std::endl;
                 }
             }
         }
@@ -271,9 +275,10 @@ void Grower::grow() {
               int i1 = firstNode->totalChilds;
               int i2 = node->totalChilds;
 
-              sprintf(msg1, "Childs count: %d%c / %d%c",
+              sprintf(msg1, "Childs count: %d%c / %d%c (%d)",
                             i1 / (i1 > 2000000 ? 1000000 : i1 > 2000 ? 1000 : 1), (i1 > 2000000 ? 'M' : i1 > 2000 ? 'K' : ' '),
-                            i2 / (i2 > 2000000 ? 1000000 : i2 > 2000 ? 1000 : 1), (i2 > 2000000 ? 'M' : i2 > 2000 ? 'K' : ' '));
+                            i2 / (i2 > 2000000 ? 1000000 : i2 > 2000 ? 1000 : 1), (i2 > 2000000 ? 'M' : i2 > 2000 ? 'K' : ' '),
+                            node->totalDirectChilds);
 
               sprintf(msg2, "Rating: %d / %d",
                         getFirstNode()->rating,
@@ -305,9 +310,10 @@ void Grower::grow() {
                         );
 
               logger->printMissStats(msg6);
-
               node->printPosition(msg7, 200);
               node->printScores(msg8, 200, this->count, neuroPlaysO);
+
+              sprintf(msg9, "Trained (field/single): %d / %d", trainedFieldCount, trainedSingleCount);
               //current()->printAttacks(msg9, 200);
 
 /* TODO

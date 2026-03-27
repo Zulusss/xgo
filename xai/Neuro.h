@@ -20,6 +20,10 @@ public:
     int moveNeuro();
 
 protected:
+
+    int trainedFieldCount;
+    int trainedSingleCount;
+
     // 2. Указатели на нейросеть и оптимизатор
     std::shared_ptr<GomokuNet> model;
     std::unique_ptr<torch::optim::Adam> optimizer;

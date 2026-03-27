@@ -6,7 +6,7 @@
 
 #include "Relator.h"
 
-#define MULTI_EXPAND_TIMES 5
+#define MULTI_EXPAND_TIMES 10
 
 class MovesBucket {
         public:

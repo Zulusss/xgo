@@ -41,6 +41,9 @@ struct GomokuNet : torch::nn::Module {
 Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
         : GameBoard(s, h, gameMode){
 
+    trainedFieldCount = 0;
+    trainedSingleCount = 0;
+
     // 1. Отключаем использование NNPACK для всех операций
     at::set_num_threads(1); // Для 15x15 одного потока за глаза, это уберет лишние проверки CPU
 
@@ -120,10 +123,16 @@ void Neuro::trainNetworkOnCurrentPosition() {
     // лог
     static int iter = 0;
     if (++iter % 25 == 0) {
-        std::cout << "[AI] Полевое обучение: Ходов " << (int)count << std::endl;
+        TNode *n = current()->node;
+        std::cout << "[AI] Полевое обучение: Ходов " << (int)count
+          << " ХэшХ " << n->hashCodeX
+          << " ХэшO " << n->hashCodeO
+          << std::endl;
     }
     // 5. Периодическое сохранение
     save(loss);
+
+    ++trainedFieldCount;
 }
 
 void Neuro::save(torch::Tensor loss) {
@@ -176,10 +185,12 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
     static int iter = 0;
     if (++iter % 500 == 0) {
         std::cout << "[AI] Точечное обучение: Ходов " << (int)count
-                  << " | Новый рейтинг: " << rating << std::endl;
+                  << " | Новый рейтинг: " << rating
+                  << " | Loss: " << loss.item<float>() << std::endl;
     }
 
     save(loss);
+    ++trainedSingleCount;
 }
 
 

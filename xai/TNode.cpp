@@ -74,13 +74,15 @@ void TNode::printPosition(char* buffer, size_t size) {
 #endif
 }
 
-// Метод 2: Счетчики x и o
+// Печатает счётчики двоек, троек и четвёрок для каждого игрока
 void TNode::printScores(char* buffer, size_t size, int count, bool neuroPlaysO) {
-    snprintf(buffer, size, "%s %d: %d+%d+%d / %d+%d+%d",
+    snprintf(buffer, size, "%s %d: %d+%d+%d / %d+%d+%d Next move: %c",
             neuroPlaysO ? "NO" : "NX",
             count,
              (int)o4, (int)o3, (int)o2,
-             (int)x4, (int)x3, (int)x2);
+             (int)x4, (int)x3, (int)x2,
+             count%2?'O':'X'
+             );
 }
 
 /*
