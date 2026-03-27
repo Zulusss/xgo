@@ -28,6 +28,7 @@ protected:
 
 private:
     TRating getNNRating(TMove move);
+    void save(torch::Tensor loss);
 
 };
 

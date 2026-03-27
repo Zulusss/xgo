@@ -118,8 +118,13 @@ void Neuro::trainNetworkOnCurrentPosition() {
     optimizer->step();
 
     // 5. Периодическое сохранение
+    save(loss);
+}
+
+void Neuro::save(torch::Tensor loss) {
+
     static int iter = 0;
-    if (++iter % 30 == 0) {
+    if (++iter % 300 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
             TNode *n = current()->node;
@@ -164,10 +169,12 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
     // лог
     static int iter = 0;
-    if (++iter % 200 == 0) {
+    if (++iter % 300 == 0) {
         std::cout << "[AI] Точечное обучение: Ходов " << (int)count
                   << " | Новый рейтинг: " << rating << std::endl;
     }
+
+    save(loss);
 }
 
 
