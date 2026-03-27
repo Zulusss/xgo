@@ -181,7 +181,7 @@ func sync(b *board, sd *StatusController) {
 					lastMove.SetResource(theme.RadioButtonIcon())
 					b.expectO = false
 					addedCount++
-git 				} else {
+ 				} else {
 				    lastMove.Reset()
 				}
 
