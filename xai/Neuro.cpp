@@ -185,6 +185,10 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
 int Neuro::moveNeuro() {
     TMove move = predictBestMove();
+    if (kl[move] > 1) {
+        std::cout << "cell is already occupied " << move << std::endl;
+        return 0;
+    }
     std::cout << "[AI] best move = " << (int)move << std::endl;
     put(move);
     //TNode* n = getChild(current()->node, move);

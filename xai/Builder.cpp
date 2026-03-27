@@ -54,10 +54,7 @@ void Builder::buildTree() {
   while(count>count0) {
 
     TNode *n = current()->node;
-
-    critical = n->rating < -CULL_RATING1 || n->rating > CULL_RATING1
-        ? current()->move
-        : 0;
+    critical = std::abs(n->rating) > 8000 ? current()->move : 0;
 
     back();
 
@@ -66,7 +63,7 @@ void Builder::buildTree() {
 
     n = current()->node;
     // Обучаем, если позиция достаточно изучена
-    if (critical == 0 && count > 0 && n->totalChilds >= 10000 && (count > 5 || n->totalChilds < 10200)) {
+    if (critical == 0 && count > 0 && n->totalChilds >= 10000 && n->totalChilds < 10200) {
         //std::cout << "[AI] added = " << added << std::endl;
         trainNetworkOnCurrentPosition();
     }

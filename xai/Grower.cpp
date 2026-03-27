@@ -117,7 +117,7 @@ void Grower::grow() {
         }
 
         //!!! NEURO AUTOPLAY CODE BEGINS
-        if (std::abs(lastMove()->rating) > 7200) {
+        if (this->count > 13 || std::abs(lastMove()->rating) > 7200) {
             restartRequested = true;
         }
         else if (lastMove()->totalChilds > 13000) {
