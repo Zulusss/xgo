@@ -227,6 +227,9 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
 
 int Neuro::moveNeuro() {
+
+    trainNetworkOnCurrentPosition();
+
     TMove move = predictBestMove();
     TNode* node = current()->node;
     do {
@@ -271,6 +274,8 @@ TMove Neuro::predictBestMove() {
     for (int i = 0; i < 225; ++i) {
         if (kl[i] > 1) {
             output[i] = -2.0f; // Занято -> худший возможный рейтинг
+        } else if (kl[i] == 0) {
+            output[i] = -1.0f;
         }
     }
 
