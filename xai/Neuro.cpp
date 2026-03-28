@@ -270,11 +270,14 @@ TMove Neuro::predictBestMove() {
     // Убираем размерность батча, делаем плоский вектор 225
     torch::Tensor output = model->forward(input).view({-1});
 
+    TNode *node = current()->node;
     // 1. Применяем маску занятых клеток
     for (int i = 0; i < 225; ++i) {
         if (kl[i] > 1) {
             output[i] = -2.0f; // Занято -> худший возможный рейтинг
         } else if (kl[i] == 0) {
+            output[i] = -1.1f;// слишком далеко от других камней
+        } else if (!isExpected(node, i)) {
             output[i] = -1.0f;
         }
     }
