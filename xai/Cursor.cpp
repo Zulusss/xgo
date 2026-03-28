@@ -180,7 +180,7 @@ void Cursor::enable(CursorHistory *curr, int x, int y, int maxDistance) {
                     TMove move = y1*fsize+x1;
                     if (x1>=0 && y1>=0 && x1<fsize && y1<fsize && kl[move] == 0 ) {
                           if (curr->enCount >= MAX_ENABLERS) {
-                              curr->enCount = curr->enCount; //TODO
+                              //curr->enCount = curr->enCount; //TODO
                           } else {
                               kl[move] = 1;
                               curr->en[curr->enCount++] = move;

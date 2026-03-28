@@ -78,14 +78,19 @@ void Builder::goBack(int count0) {
         TNode *n = current()->node;
         critical = std::abs(n->rating) > 8000 ? current()->move : 0;
         back();
-        if (critical)
-            trainNetworkOnSingleMove(critical, n->rating);
         n = current()->node;
+//        if (count == 1)
+//            std::cout << " back to 1. total childs: " << n->totalChilds << std::endl;
+
         // Обучаем, если позиция достаточно изучена
-        if (critical == 0 && count > 0 && n->totalChilds >= 10000) {
+        if (count > 0 && (n->totalChilds >= 10000
+             || n->totalDirectChilds == 1
+             || n->totalDirectChilds <= 4 && n->totalChilds >= 1000
+            )) {
             //std::cout << "[AI] added = " << added << std::endl;
             trainNetworkOnCurrentPosition();
-        }
+        } else if (critical)
+            trainNetworkOnSingleMove(critical, n->rating);
     }
     else {
         back();

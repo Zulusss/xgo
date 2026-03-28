@@ -41,6 +41,8 @@ struct GomokuNet : torch::nn::Module {
 Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
         : GameBoard(s, h, gameMode){
 
+    lossTracker = new LossTracker(1000);
+
     trainedFieldCount = 0;
     trainedSingleCount = 0;
     skipTrainFieldCount = 0;
@@ -88,18 +90,22 @@ torch::Tensor Neuro::getTensorFromField() {
 };
 
 void Neuro::trainNetworkOnCurrentPosition() {
+    // Объявляем статический массив из 250 указателей на TNode
+    static TNode* prev[250] = { nullptr };
+    TNode *par = current()->node;
+    // Проверяем, совпадает ли текущий узел с тем, что сохранен под индексом count
+    if (count > 3 && prev[count] == par) {
+        ++skipTrainFieldCount;
+        return;
+    }
+    // Обновляем значение в массиве по индексу count
+    prev[count] = par;
+
     torch::Tensor input = getTensorFromField();
     auto targetRatings = torch::zeros({1, 225});
     auto mask = torch::full({1, 225}, true, torch::kBool); // Обучаем все 225 клеток
 
-    static TNode *prev = NULL;
-    TNode *par = current()->node;
-    if (prev == par) {
-        ++skipTrainFieldCount;
-        return;
-    }
-    prev = par;
-
+    int ccount = 0;
     // 1. Проходим по всем клеткам поля
     for (int i = 0; i < 225; ++i) {
         if (kl[i] > 1) {
@@ -113,9 +119,13 @@ void Neuro::trainNetworkOnCurrentPosition() {
             if (node) {
                 // Алгоритм уже знает эту позицию! Берем реальный рейтинг
                 targetRatings[0][i] = (float)(node->rating / 32768.0f);
+                ++ccount;
             } else {
                 // Позиция не исследована
-                targetRatings[0][i] = -0.5f;
+                targetRatings[0][i] = kl[i] == 1 ? -0.15
+                    : par->x3 || par->x4 || par->o3 || par->o4 ? -0.9f
+                    : count < 4 ? -0.8f
+                    : par->o2 > 5 || par->x2 > 5 ? -0.6f : -0.5f;
             }
         }
     }
@@ -129,20 +139,27 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // лог
     static int iter = 0;
-    if (++iter % 50 == 0) {
+    if (++iter % 200 == 0 || count < 3) {
         TNode *n = current()->node;
-        std::cout << "[AI] Полевое обучение: Ходов " << (int)count
-          << " ХэшХ " << n->hashCodeX
-          << " ХэшO " << n->hashCodeO
+        std::cout << "[AI] Полевое обучение: Ходов: " << (int)count
+          << " дочерних: " << ccount
+          << " / " << (int)par->totalDirectChilds
+          << " / " << par->totalChilds
+          << " ХэшХ: " << n->hashCodeX
+          << " ХэшO: " << n->hashCodeO
+          << " | Loss: " << loss.item<float>()
+          << " | Avg.Loss: " << lossTracker->toString()
           << std::endl;
     }
     // 5. Периодическое сохранение
-    save(loss);
+    save(loss.item<float>());
 
     ++trainedFieldCount;
 }
 
-void Neuro::save(torch::Tensor loss) {
+void Neuro::save(float loss) {
+
+    lossTracker->addLoss(loss);
 
     static int iter = 0;
     if (++iter % 500 == 0) {
@@ -156,7 +173,9 @@ void Neuro::save(torch::Tensor loss) {
                   << " Rating " << n->rating
                   //<< " Ход: " << (int)lastMove
                   //<< " | Рейтинг: " << normRating
-                  << " | Loss: " << loss.item<float>() << std::endl;
+                  << " | Loss: " << loss
+                  << " | Avg.Loss: " << lossTracker->toString()
+                  << std::endl;
             }
         } catch (const std::exception& e) {
             std::cerr << "[AI] Ошибка сохранения: " << e.what() << std::endl;
@@ -167,7 +186,7 @@ void Neuro::save(torch::Tensor loss) {
 void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
     static int iter = 0;
-    if (++iter % 5 != 0) return;
+    //if (++iter % 5 != 0) return;
 
     torch::Tensor input = getTensorFromField();
 
@@ -202,7 +221,7 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
                   << " | Loss: " << loss.item<float>() << std::endl;
     }
 
-    save(loss);
+    save(loss.item<float>());
 
 }
 
@@ -218,8 +237,12 @@ int Neuro::moveNeuro() {
 
         TNode* child = getChild(node, move);
 
-        if (child != NULL && child->rating < 6200) {
-            trainNetworkOnSingleMove(move, child->rating);
+        if (child == NULL || child != NULL && std::abs(node->rating + child->rating) >= 600) {
+            if (child == NULL)
+                trainNetworkOnCurrentPosition();
+            else
+                trainNetworkOnSingleMove(move, child->rating);
+
             TMove move1 = predictBestMove();
             if (move1 != move) {
                 std::cout << "predicted cell changed " << move << " -> " << move1 << std::endl;

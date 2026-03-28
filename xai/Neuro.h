@@ -3,6 +3,10 @@
 #define NeuroH
 //---------------------------------------------------------------------------
 #include "GameBoard.h"
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <cmath>
 #include <torch/torch.h>
 
 #include <memory> // для shared_ptr
@@ -11,6 +15,54 @@
 struct GomokuNet;
 namespace at { class Tensor; }
 namespace torch { namespace optim { class Adam; } } // для оптимизатора
+
+class LossTracker {
+
+private:
+    float movingAverage = 0.0f;
+    int count = 0; // Счётчик вызовов
+    const int threshold;
+
+public:
+    explicit LossTracker(int t = 10) : threshold(t > 0 ? t : 1) {}
+
+    void addLoss(float loss) {
+        count++;
+
+        // Определяем вес нового значения (альфа)
+        // Если count <= 10, это будет 1/1, 1/2 ... 1/10
+        // Если count > 10, фиксируем на 1/10 (0.1f)
+        float alpha = (count <= threshold) ? (1.0f / count) : (1.0f / threshold);
+
+        if (count == 1) {
+            movingAverage = loss;
+        } else {
+            // Формула скользящего среднего
+            movingAverage = (loss * alpha) + (movingAverage * (1.0f - alpha));
+        }
+    }
+
+std::string toString() const {
+    std::stringstream ss;
+
+    if (movingAverage == 0.0f) {
+        ss << "0, loss_cnt=" << count;
+    } else {
+        // Находим позицию первой значащей цифры после запятой
+        // Если avg = 0.00123, то -log10(0.00123) ≈ 2.9, ceil ≈ 3.
+        // Прибавляем 1, чтобы получить 2 значащие цифры (3+1=4 знака после запятой).
+        int firstDigitPos = static_cast<int>(std::ceil(-std::log10(std::abs(movingAverage))));
+        if (firstDigitPos < 0) firstDigitPos = 0; // Если число > 1
+
+        int precision = firstDigitPos + 1; // 1 доп. знак после первого значащего
+
+        ss << std::fixed << std::setprecision(precision) << movingAverage
+           << ", loss_cnt=" << count;
+    }
+    return ss.str();
+}
+
+};
 
 class Neuro : public GameBoard {
 public:
@@ -32,8 +84,9 @@ protected:
     TMove predictBestMove();
 
 private:
+    LossTracker *lossTracker;
     TRating getNNRating(TMove move);
-    void save(torch::Tensor loss);
+    void save(float loss);
 
 };
 

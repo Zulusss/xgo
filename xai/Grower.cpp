@@ -143,6 +143,7 @@ void Grower::grow() {
                     if (neuroWon) {
                         std::cout << "[RESTART] Reason: NEURO WON ("
                             << (neuroPlaysO ? "O" : "X")
+                            << " Count: " << this->count
                             << " Rating: "
                             << lastRating
                             //<< " neuroPlaysO: " << neuroPlaysO
@@ -152,6 +153,7 @@ void Grower::grow() {
                     } else {
                         std::cout << "[RESTART] Reason: LEGACY WON ("
                             << (neuroPlaysO ? "X" : "O")
+                            << " Count: " << this->count
                             << " Rating: "
                             << lastRating << ")" << std::endl;
                         regularWinsCount++;

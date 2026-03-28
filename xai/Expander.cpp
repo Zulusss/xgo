@@ -316,7 +316,7 @@ void Expander::findMovesToExpand(int startPass) {
 
                     // Проверка: клетка должна быть пустой (kl[m] & 3 == 0) и разрешенной
                     if ((kl[m] & 12) == 0) {
-                        if ((mode1 ? kl[m] <= 1 && isPerspectiveChildMode1(m) : isPerspectiveChild(m)) && isAlllowed(m)) {
+                        if ((kl[m] == 1 && mode1 ? isPerspectiveChildMode1(m) : isPerspectiveChild(m)) && isAlllowed(m)) {
                             addChildNoDupe(curr, m);
 
                         }
@@ -365,7 +365,7 @@ void Expander::findMovesToExpand(int startPass) {
 
     // 2. Общий сбор ходов (выполняется если атак нет)
     for (TMove i = 0; i < TOTAL_CELLS; ++i) {
-        if ((mode1 ? kl[i] <= 1 && isPerspectiveChildMode1(i) : isPerspectiveChild(i)) && isAlllowed(i)) {
+        if ((kl[i] == 1 && mode1 ? isPerspectiveChildMode1(i) : isPerspectiveChild(i)) && isAlllowed(i)) {
             addChild(curr, i);
         }
     }
