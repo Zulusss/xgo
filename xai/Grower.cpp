@@ -141,8 +141,8 @@ void Grower::grow() {
                     bool neuroWon = (neuroMovedLast == (lastRating > 0));
 
                     if (neuroWon) {
-                        std::cout << "[RESTART] Reason: NEURO WON ("
-                            << (neuroPlaysO ? "O" : "X")
+                        std::cout << "[RESTART] Reason: O WON ("
+                            //<< (neuroPlaysO ? "O" : "X")
                             << " Count: " << this->count
                             << " Rating: "
                             << lastRating
@@ -151,8 +151,8 @@ void Grower::grow() {
                             << ")" << std::endl;
                         neuroWinsCount++;
                     } else {
-                        std::cout << "[RESTART] Reason: LEGACY WON ("
-                            << (neuroPlaysO ? "X" : "O")
+                        std::cout << "[RESTART] Reason: X WON ("
+                            //<< (neuroPlaysO ? "X" : "O")
                             << " Count: " << this->count
                             << " Rating: "
                             << lastRating << ")" << std::endl;
@@ -166,20 +166,20 @@ void Grower::grow() {
                           << " | Draws: " << drawsCount << std::endl;
 
                 // Смена ролей и сброс
-                neuroPlaysO = !neuroPlaysO;
-                std::cout << "Requested restart. Neuro next: " << (neuroPlaysO ? "O" : "X") << std::endl;
+//              neuroPlaysO = !neuroPlaysO;
+                //std::cout << "Requested restart. Neuro next: " << (neuroPlaysO ? "O" : "X") << std::endl;
             }
             else if (lastMove()->totalChilds > childPerMove) {
-                // Выбор следующего игрока:
-                // Если count=0 (ход X) и neuroPlaysO=false — ходит нейросеть
-                if (neuroPlaysO == (this->count % 2 != 0)) {
-                    moveNeuroRequested = true;
-                    //std::cout << "Requested neuro move " << (this->count%2?"(O)":"(X)") << std::endl;
-
-                } else {
+//                // Выбор следующего игрока:
+//                // Если count=0 (ход X) и neuroPlaysO=false — ходит нейросеть
+//                if (neuroPlaysO == (this->count % 2 != 0)) {
+//                    moveNeuroRequested = true;
+//                    //std::cout << "Requested neuro move " << (this->count%2?"(O)":"(X)") << std::endl;
+//
+//                } else {
                     moveRequested = true;
-                    //std::cout << "Requested legacy move " << (this->count%2?"(O)":"(X)") << std::endl;
-                }
+//                    //std::cout << "Requested legacy move " << (this->count%2?"(O)":"(X)") << std::endl;
+//                }
             }
         }
         //================= !!! NEURO AUTOPLAY CODE ENDS =======================
