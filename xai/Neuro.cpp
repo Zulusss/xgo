@@ -14,27 +14,30 @@
 // Архитектура сети
 struct GomokuNet : torch::nn::Module {
     GomokuNet() {
-        // Слой 1: Вход 1 канал (ваше поле), выход 32 фильтра. Окно 3x3.
-        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(1, 32, 3).padding(1)));
-        // Слой 2: Ищем более сложные паттерны (вилки)
-        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(32, 64, 3).padding(1)));
-        // Слой 3: Финальный сбор признаков
-        conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)));
-        // Выход: 225 нейронов (по одному на каждую клетку поля 15x15)
-        fc = register_module("fc", torch::nn::Linear(64 * 15 * 15, 225));
+        // Увеличиваем фильтры до 64 и добавляем BatchNorm
+        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(1, 64, 3).padding(1)));
+        bn1 = register_module("bn1", torch::nn::BatchNorm2d(64));
+
+        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)));
+        bn2 = register_module("bn2", torch::nn::BatchNorm2d(64));
+
+        conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 128, 3).padding(1)));
+        bn3 = register_module("bn3", torch::nn::BatchNorm2d(128));
+
+        // Линейный слой без tanh на конце
+        fc = register_module("fc", torch::nn::Linear(128 * 15 * 15, 225));
     }
 
     torch::Tensor forward(torch::Tensor x) {
-        x = torch::relu(conv1->forward(x));
-        x = torch::relu(conv2->forward(x));
-        x = torch::relu(conv3->forward(x));
+        x = torch::relu(bn1->forward(conv1->forward(x)));
+        x = torch::relu(bn2->forward(conv2->forward(x)));
+        x = torch::relu(bn3->forward(conv3->forward(x)));
         x = x.view({x.size(0), -1});
-
-        // Используем tanh, чтобы выходы сети лежали в диапазоне [-1, 1]
-        return torch::tanh(fc->forward(x));
+        return fc->forward(x); // Убрали tanh, MSE лучше работает с сырыми числами
     }
 
     torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
+    torch::nn::BatchNorm2d bn1{nullptr}, bn2{nullptr}, bn3{nullptr};
     torch::nn::Linear fc{nullptr};
 };
 
@@ -55,14 +58,21 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
     torch::set_num_threads(1);
 
     model = std::make_shared<GomokuNet>();
-    optimizer = std::make_unique<torch::optim::Adam>(model->parameters(), torch::optim::AdamOptions(1e-3));
+    optimizer = std::make_unique<torch::optim::Adam>(model->parameters(), torch::optim::AdamOptions(1e-4));
 
     // Пытаемся загрузить существующую модель
     std::ifstream file("gomoku_model.pt");
     if (file.good()) {
         try {
             torch::load(model, "gomoku_model.pt");
-            std::cout << "[AI] Загружена обученная модель из файла." << std::endl;
+
+            bool opt = std::ifstream("gomoku_optimizer.pt").good();
+            // Опционально: загрузка оптимизатора, если сохраняли его
+            if (opt) {
+                torch::load(*optimizer, "gomoku_optimizer.pt");
+            }
+            std::cout << "[AI] Загружена обученная модель из файла. "
+                << (opt ? " +optimizer " : "") << std::endl;
         } catch (...) {
             std::cout << "[AI] Файл модели поврежден, начинаем обучение с нуля." << std::endl;
         }
@@ -90,70 +100,72 @@ torch::Tensor Neuro::getTensorFromField() {
 };
 
 void Neuro::trainNetworkOnCurrentPosition() {
-    // Объявляем статический массив из 250 указателей на TNode
+    // 1. Проверка на повторное обучение той же позиции
     static TNode* prev[250] = { nullptr };
     TNode *par = current()->node;
-    // Проверяем, совпадает ли текущий узел с тем, что сохранен под индексом count
     if (count > 3 && prev[count] == par) {
         ++skipTrainFieldCount;
         return;
     }
-    // Обновляем значение в массиве по индексу count
     prev[count] = par;
 
+    // 2. Подготовка входных данных
     torch::Tensor input = getTensorFromField();
-    auto targetRatings = torch::zeros({1, 225});
-    auto mask = torch::full({1, 225}, true, torch::kBool); // Обучаем все 225 клеток
 
-    int ccount = 0;
-    // 1. Проходим по всем клеткам поля
+    // Создаем таргеты и маску (все во float32)
+    auto targetRatings = torch::zeros({1, 225});
+    auto mask = torch::zeros({1, 225});
+
+    int knownNodesCount = 0;
+
+    // 3. Заполнение таргетов и маски
     for (int i = 0; i < 225; ++i) {
         if (kl[i] > 1) {
-            // Клетка занята: жесткий штраф
+            // Клетка занята: фиксируем штраф, чтобы сеть не предлагала туда ходить
             targetRatings[0][i] = -1.0f;
+            mask[0][i] = 1.0f;
         }
         else {
-            // Клетка пуста: проверяем, есть ли она в нашей базе знаний (TNode)
             TNode* node = getChild(par, i);
-
             if (node) {
-                // Алгоритм уже знает эту позицию! Берем реальный рейтинг
+                // Данные из дерева поиска (самые ценные)
                 targetRatings[0][i] = (float)(node->rating / 32768.0f);
-                ++ccount;
-            } else {
-                // Позиция не исследована
-                targetRatings[0][i] = kl[i] == 1 ? -0.15
-                    : par->x3 || par->x4 || par->o3 || par->o4 ? -0.9f
-                    : count < 4 ? -0.8f
-                    : par->o2 > 5 || par->x2 > 5 ? -0.6f : -0.5f;
+                mask[0][i] = 1.0f;
+                knownNodesCount++;
             }
+            // Все остальные клетки игнорируем (mask = 0).
+            // Это решает проблему высокого Loss на пустых полях.
         }
     }
 
-    // 2. Стандартный цикл обучения LibTorch
+    // 4. Шаг обучения
+    model->train();
     optimizer->zero_grad();
+
     auto output = model->forward(input);
-    auto loss = torch::mse_loss(output, targetRatings);
+
+    // Считаем MSE вручную только для маскированных элементов
+    // (выход - цель)^2 * маска
+    auto loss_map = torch::pow(output - targetRatings, 2) * mask;
+
+    // Средний лосс только по активным клеткам (чтобы не делить на 225)
+    auto loss = loss_map.sum() / (mask.sum() + 1e-6);
+
     loss.backward();
     optimizer->step();
 
-    // лог
+    // 5. Логирование
     static int iter = 0;
-    if (++iter % 200 == 0 || count < 3) {
-        TNode *n = current()->node;
-        std::cout << "[AI] Полевое обучение: Ходов: " << (int)count
-          << " дочерних: " << ccount
-          << " / " << (int)par->totalDirectChilds
-          << " / " << par->totalChilds
-          << " ХэшХ: " << n->hashCodeX
-          << " ХэшO: " << n->hashCodeO
-          << " | Loss: " << loss.item<float>()
-          << " | Avg.Loss: " << lossTracker->toString()
-          << std::endl;
+    if (++iter % 200 == 0 || count < 4) {
+        std::cout << "[AI] Полевое обучение: Ход: " << (int)count
+                  << " | Обучено клеток: " << knownNodesCount
+                  << " / " << (int)par->totalDirectChilds
+                  << " | Loss: " << loss.item<float>()
+                  << " | Avg.Loss: " << lossTracker->toString()
+                  << std::endl;
     }
-    // 5. Периодическое сохранение
-    save(loss.item<float>());
 
+    save(loss.item<float>());
     ++trainedFieldCount;
 }
 
@@ -164,7 +176,10 @@ void Neuro::save(float loss) {
     static int iter = 0;
     if (++iter % 500 == 0) {
         try {
+            // 1. Сохраняем веса нейросети
             torch::save(model, "gomoku_model.pt");
+            // 2. Сохраняем состояние Adam (важно для продолжения обучения)
+            torch::save(*optimizer, "gomoku_optimizer.pt");
             TNode *n = current()->node;
             if (++iter % 2000 == 0) {
                 std::cout << "[AI] Модель сохранена. Ходов " << count
@@ -184,45 +199,41 @@ void Neuro::save(float loss) {
 };
 
 void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
-
-    static int iter = 0;
-    //if (++iter % 5 != 0) return;
-
+    // 1. Подготовка данных
     torch::Tensor input = getTensorFromField();
-
-    // 1. Получаем текущее предсказание сети (чтобы не менять остальные 224 клетки)
-    model->eval(); // Временно выключаем дропаут
-    torch::Tensor currentOutput;
-    {
-        torch::NoGradGuard no_grad;
-        currentOutput = model->forward(input).clone();
-    }
-    model->train();
-
-    // 2. Создаем Target: оставляем всё как есть, кроме целевого хода
-    auto target = currentOutput;
     float normRating = (float)rating / 32768.0f;
-    target[0][(int)move] = normRating;
 
-    // 3. Шаг обучения
+    // 2. Включаем режим обучения
+    model->train();
     optimizer->zero_grad();
+
+    // 3. Прямой проход (forward)
     auto output = model->forward(input);
 
-    // Считаем ошибку MSE
-    auto loss = torch::mse_loss(output, target);
+    // 4. Выделяем предсказание только для нужной клетки (индекса хода)
+    // Используем squeeze/unsqueeze для корректности размерностей тензора [1]
+    auto predicted = output[0][(int)move].unsqueeze(0);
+    auto target = torch::tensor({normRating}, torch::kFloat32).to(output.device());
+
+    // 5. Считаем ошибку ТОЛЬКО по этому ходу
+    // Остальные 224 клетки не участвуют в backward(), их градиент будет 0
+    auto loss = torch::mse_loss(predicted, target);
+
+    // 6. Обратный проход и шаг оптимизатора
     loss.backward();
     optimizer->step();
 
-    // лог
+    // 7. Логирование и статистика
     ++trainedSingleCount;
-    if (trainedSingleCount % 2000 == 0) {
-        std::cout << "[AI] Точечное обучение: Ходов " << (int)count
-                  << " | Новый рейтинг: " << rating
+    if (trainedSingleCount % 2000 == 0 || count < 4) {
+        std::cout << "[AI] Точечное обучение: Ход " << (int)count
+                  << " | Индекс: " << (int)move
+                  << " | Рейтинг: " << rating
                   << " | Loss: " << loss.item<float>() << std::endl;
     }
 
+    // Сохраняем состояние (опционально, если loss не слишком шумный)
     save(loss.item<float>());
-
 }
 
 
