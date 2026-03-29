@@ -41,7 +41,7 @@ struct GomokuNet : torch::nn::Module {
 Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
         : GameBoard(s, h, gameMode){
 
-    lossTracker = new LossTracker(1000);
+    lossTracker = new LossTracker(3000);
 
     trainedFieldCount = 0;
     trainedSingleCount = 0;
