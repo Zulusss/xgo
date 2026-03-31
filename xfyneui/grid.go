@@ -19,6 +19,7 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 	board := &board{gb: gb}
 
 	grid := container.NewGridWithColumns(15)
+	// grid := container.NewGridWrap(fyne.NewSize(40, 40))
 	for r := 0; r < 15; r++ {
 		for c := 0; c < 15; c++ {
 			grid.Add(newBoardIcon(r, c, board))
@@ -44,7 +45,7 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 		board.ForceNextMoveNeuro()
 	})
 
-    // Добавляем кнопку отмены хода (Take Back)
+	// Добавляем кнопку отмены хода (Take Back)
 	takeBack := widget.NewButtonWithIcon("Take Back", theme.ContentUndoIcon(), func() {
 		for _, obj := range grid.Objects {
 			stack := obj.(*fyne.Container)

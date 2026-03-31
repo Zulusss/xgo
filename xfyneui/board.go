@@ -63,16 +63,16 @@ func (b *board) Reset(initial bool) {
 }
 
 func (b *board) ForceNextMove() {
-    b.gb.MoveClick()
+	b.gb.MoveClick()
 }
 
 func (b *board) ForceNextMoveNeuro() {
-    b.gb.MoveNeuroClick()
+	b.gb.MoveNeuroClick()
 }
 
 func (b *board) TakeBack() {
 
-    b.gb.TakeBackClick()
+	b.gb.TakeBackClick()
 
 	for r := 0; r < 15; r++ {
 		for c := 0; c < 15; c++ {
@@ -106,14 +106,30 @@ func newBoardIcon(row, column int, board *board) fyne.CanvasObject {
 
 	i := &boardIcon{board: board, row: row, column: column}
 	i.ExtendBaseWidget(i)
-	i.SetResource(nil)
+	// i.SetResource(nil)
 	rect := canvas.NewRectangle(color.Transparent)
-	rect.StrokeColor = theme.ForegroundColor()
+	// rect.StrokeColor = theme.ForegroundColor()
+	// rect.StrokeColor = theme.Color(theme.ColorNameForeground)
+	// rect.StrokeColor = color.NRGBA{R: 255, G: 0, B: 0, A: 255}
+	// rect.StrokeColor = theme.Color(theme.ColorNameForeground)
+	// rect.StrokeColor = theme.Color(theme.ColorNameText)
+	if fyne.CurrentApp().Settings().ThemeVariant() == 1 { // 1 обычно Light, 0 - Dark
+		rect.StrokeColor = color.Black
+	} else {
+		rect.StrokeColor = color.White
+	}
 	rect.StrokeWidth = 1
+	// rect.SetMinSize(fyne.NewSize(40, 40))
 	board.icons[row][column] = i
+	rect.Refresh()
 	return container.NewStack(rect, i)
 
 }
+
+// func (i *boardIcon) MinSize() fyne.Size {
+// 	// Укажите размер ячейки, который вам нужен (например, 40x40)
+// 	return fyne.NewSize(40, 40)
+// }
 
 func sync(b *board, sd *StatusController) {
 
@@ -181,8 +197,8 @@ func sync(b *board, sd *StatusController) {
 					lastMove.SetResource(theme.RadioButtonIcon())
 					b.expectO = false
 					addedCount++
- 				} else {
-				    lastMove.Reset()
+				} else {
+					lastMove.Reset()
 				}
 
 				if b.humanX == (code < 0) {
@@ -216,16 +232,38 @@ func sync(b *board, sd *StatusController) {
 			b.finished = true
 		}
 
-// 		if b.displayedMovesCount == 225 {
-// 			dialog.ShowInformation("It is a tie!", "Nobody has won. Better luck next time.", fyne.CurrentApp().Driver().AllWindows()[0])
-// 			b.finished = true
-// 		}
+		// 		if b.displayedMovesCount == 225 {
+		// 			dialog.ShowInformation("It is a tie!", "Nobody has won. Better luck next time.", fyne.CurrentApp().Driver().AllWindows()[0])
+		// 			b.finished = true
+		// 		}
 		return
 	}
 }
 
 func syncPeriodic(b *board, sd *StatusController) {
-	for range time.Tick(time.Millisecond * 400) {
-		sync(b, sd)
+	// for range time.Tick(time.Millisecond * 400) {
+	// 	sync(b, sd)
+	// }
+	// Используем NewTicker вместо Tick, чтобы не плодить утечки памяти
+	ticker := time.NewTicker(time.Millisecond * 400)
+	defer ticker.Stop()
+	for range ticker.C {
+		// Выполняем sync в главном потоке UI
+		// fyne.CurrentApp().Driver().RunOnMain(func() {
+		// 	sync(b, sd)
+		// })
+		// Выполняем sync в главном потоке UI через fyne.Do
+		fyne.Do(func() {
+			sync(b, sd)
+		})
+		// app := fyne.CurrentApp()
+		// if app == nil {
+		// 	continue
+		// }
+
+		// Отправляем задачу на выполнение в главный поток UI
+		// app.Driver().AllWindows()[0].QueueEvent(func() {
+		// 	sync(b, sd)
+		// })
 	}
 }
