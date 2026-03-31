@@ -259,7 +259,7 @@ int Neuro::moveNeuro() {
 
             TMove move1 = predictBestMove();
             if (move1 != move) {
-                std::cout << "predicted cell changed " << move << " -> " << move1 << std::endl;
+                std::cout << "predicted cell changed " << (int)move << " -> " << (int)move1 << std::endl;
                 move = move1;
                 continue;
             }
