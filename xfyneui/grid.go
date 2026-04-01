@@ -30,7 +30,7 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 		for _, obj := range grid.Objects {
 			stack := obj.(*fyne.Container)
 			icon := stack.Objects[1].(*boardIcon)
-			icon.Reset()
+			icon.ResetIcon()
 		}
 		board.Reset(false)
 	})
@@ -50,7 +50,7 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 		for _, obj := range grid.Objects {
 			stack := obj.(*fyne.Container)
 			icon := stack.Objects[1].(*boardIcon)
-			icon.Reset()
+			icon.ResetIcon()
 		}
 		board.TakeBack()
 	})
