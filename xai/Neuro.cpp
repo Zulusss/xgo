@@ -1,6 +1,7 @@
 //---------------------------------------------------------------------------
 #include <iostream>
 #include <fstream>
+#include <thread>
 
 #pragma hdrstop
 
@@ -44,18 +45,32 @@ struct GomokuNet : torch::nn::Module {
 Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
         : GameBoard(s, h, gameMode){
 
+    #ifdef __linux__
+        setenv("NNPACK_MODE", "0", 1); 
+    #endif
+    
     lossTracker = new LossTracker(3000);
 
     trainedFieldCount = 0;
     trainedSingleCount = 0;
     skipTrainFieldCount = 0;
 
-    // 1. Отключаем использование NNPACK для всех операций
-    at::set_num_threads(1); // Для 15x15 одного потока за глаза, это уберет лишние проверки CPU
+    // // 1. Отключаем использование NNPACK для всех операций
+    // at::set_num_threads(1); // Для 15x15 одного потока за глаза, это уберет лишние проверки CPU
 
-    // 2. Глобальный флаг отключения оптимизаций, вызывающих NNPACK
-    // (актуально для сверточных сетей на CPU)
-    torch::set_num_threads(1);
+    // // 2. Глобальный флаг отключения оптимизаций, вызывающих NNPACK
+    // // (актуально для сверточных сетей на CPU)
+    // torch::set_num_threads(1);
+
+    // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+    // Получаем количество ядер вашего процессора (например, 8 или 16)
+    int threads = std::thread::hardware_concurrency();
+    if (threads == 0) threads = 4; // подстраховка
+
+    // Устанавливаем многопоточность для LibTorch
+    at::set_num_threads(threads); 
+    torch::set_num_threads(threads);
+    // -----------------------
 
     model = std::make_shared<GomokuNet>();
     optimizer = std::make_unique<torch::optim::Adam>(model->parameters(), torch::optim::AdamOptions(1e-4));

@@ -9,11 +9,18 @@ package main
 import "C"
 
 import (
-    "os"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
+
+	// "fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/ratamahata/xgo/xfyneui"
 )
@@ -39,9 +46,26 @@ var appx = appInfo{
 }
 
 func main() {
-    os.Setenv("TORCH_CPP_LOG_LEVEL", "ERROR")
+
+	// Пытаемся узнать тему Windows (только для WSL/Windows)
+	winTheme, err := getWindowsTheme()
+
+	// Если ошибки нет — значит мы в WSL/Windows и получили ответ.
+	// Принудительно ставим переменную окружения.
+	if err == nil {
+		os.Setenv("FYNE_THEME", winTheme)
+		fmt.Println("Setting FYNE_THEME to:", winTheme) // Добавьте для проверки
+	}
+	// Если err != nil — мы ничего не меняем.
+	// Fyne сам пойдет опрашивать систему (Linux/macOS) как обычно.
+
+	os.Setenv("TORCH_CPP_LOG_LEVEL", "ERROR")
 
 	a := app.New()
+	if winTheme == "dark" {
+		a.Settings().SetTheme(theme.DarkTheme())
+	}
+	// a.Settings().SetTheme(theme.DarkTheme())
 	a.SetIcon(resourceIconPng)
 
 	// 1. Initialize Status Data
@@ -68,4 +92,26 @@ func main() {
 	w.SetContent(content)
 	w.Resize(fyne.NewSize(580, 605))
 	w.ShowAndRun()
+}
+
+func getWindowsTheme() (string, error) {
+	// Запускаем PowerShell. В WSL это работает через интероп.
+	cmd := exec.Command("powershell.exe", "-Command",
+		`Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" | Select-Object -ExpandProperty AppsUseLightTheme`)
+
+	out, err := cmd.Output()
+	fmt.Println(out, err)
+	if err != nil {
+		return "", err // Возвращаем ошибку, чтобы main знал: мы не на Windows
+	}
+
+	result := strings.TrimSpace(string(out))
+	if result == "0" {
+		return "dark", nil
+	}
+	if result == "1" {
+		return "light", nil
+	}
+
+	return "", fmt.Errorf("unexpected output")
 }
