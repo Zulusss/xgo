@@ -86,6 +86,7 @@ type boardIcon struct {
 	widget.Icon
 	board       *board
 	row, column int
+    rect        *canvas.Rectangle // Ссылка на рамку
 }
 
 func (i *boardIcon) Tapped(ev *fyne.PointEvent) {
@@ -102,17 +103,31 @@ func (i *boardIcon) Reset() {
 	i.Refresh()
 }
 
-func newBoardIcon(row, column int, board *board) fyne.CanvasObject {
-
+func newBoardIcon(row, column int, board *board) *boardIcon {
 	i := &boardIcon{board: board, row: row, column: column}
-	i.ExtendBaseWidget(i)
-	rect := canvas.NewRectangle(color.Transparent)
-    rect.StrokeColor = theme.BackgroundColor()
-	rect.StrokeWidth = 1
+	i.rect = canvas.NewRectangle(color.Transparent)
+	i.rect.StrokeWidth = 1
+	i.rect.StrokeColor = theme.ForegroundColor()
 	board.icons[row][column] = i
-	rect.Refresh()
-	return container.NewStack(rect, i)
+	return i
+}
 
+// CreateRenderer определяет, как выглядит виджет
+func (i *boardIcon) CreateRenderer() fyne.WidgetRenderer {
+    // Получаем стандартный рендерер иконки, чтобы она работала как обычно
+	iconRenderer := i.Icon.CreateRenderer()
+
+    // Оборачиваем иконку и нашу рамку в Stack
+	content := container.NewStack(i.rect, iconRenderer.Objects()[0])
+
+	return widget.NewSimpleRenderer(content)
+}
+
+// Refresh вызывается системой автоматически при смене темы
+func (i *boardIcon) Refresh() {
+ 	i.rect.StrokeColor = theme.ForegroundColor()
+ 	i.rect.Refresh()
+ 	i.Icon.Refresh() // Вызываем Refresh у родителя
 }
 
 func sync(b *board, sd *StatusController) {
