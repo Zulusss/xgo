@@ -124,7 +124,7 @@ void Grower::grow() {
             bool isWin = std::abs(lastRating) > 8000;
 
             // Условие перезапуска: победный рейтинг или лимит ходов
-            if (this->count > 21 || (isWin && this->count > 1)) {
+            if (this->count > 142 || (isWin && this->count > 1)) {
                 restartRequested = true;
 
                 if (!isWin) {

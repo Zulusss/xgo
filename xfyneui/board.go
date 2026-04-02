@@ -108,11 +108,16 @@ func newBoardIcon(row, column int, board *board) fyne.CanvasObject {
 	i.ExtendBaseWidget(i)
 	// i.SetResource(nil)
 	rect := canvas.NewRectangle(color.Transparent)
+
 	// rect.StrokeColor = theme.ForegroundColor()
+
 	// rect.StrokeColor = theme.Color(theme.ColorNameForeground)
 	// rect.StrokeColor = color.NRGBA{R: 255, G: 0, B: 0, A: 255}
 	// rect.StrokeColor = theme.Color(theme.ColorNameForeground)
 	// rect.StrokeColor = theme.Color(theme.ColorNameText)
+
+	// rect.StrokeColor = theme.BackgroundColor()
+
 	if fyne.CurrentApp().Settings().ThemeVariant() == 1 { // 1 обычно Light, 0 - Dark
 		rect.StrokeColor = color.Black
 	} else {
