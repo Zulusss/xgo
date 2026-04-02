@@ -23,7 +23,7 @@ class Relator : public Evaluator {
         bool isPerspectiveChild(TMove move);
         bool isPerspectiveChildMode1(TMove move);
 
-        bool updateNode(TNode *node, TNode *from, bool updateRating, int addedChilds, int removedFromEnd);        
+        bool updateNode(TNode *node, bool updateRating, int addedChilds);
 
 
 //-------------------------------------

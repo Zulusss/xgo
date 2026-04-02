@@ -67,7 +67,7 @@ void Relator::updateParents(TNode *node, int removed, int removedFromEnd,
     for(int i = max; i > 0; i -= 2) {
         TNode *parent = getParent(node, history[i].move);
         if (parent != NULL) {
-            updateRating = updateNode(parent, node, updateRating, addedChilds, removedFromEnd);
+            updateRating = updateNode(parent, updateRating, addedChilds);
             updateParents(parent, removed+1,
                 onlyLastRemoved&& i == max
                     ? removedFromEnd+1
@@ -85,7 +85,7 @@ void Relator::updateParents(TNode *node, int removed, int removedFromEnd,
     }
 };
 
-bool Relator::updateNode(TNode *node, TNode *from, bool updateRating, int addedChilds, int removedFromEnd) {
+bool Relator::updateNode(TNode *node, bool updateRating, int addedChilds) {
     bool ratingUpdated = false;
     if (updateRating || addedChilds == 0) {
         short int max_rating = -32600;

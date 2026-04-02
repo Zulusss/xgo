@@ -234,7 +234,7 @@ void Grower::grow() {
                 }
             }
 
-            if (count > 1) {
+            if (this->count > 1) {
                 back();
             }
 

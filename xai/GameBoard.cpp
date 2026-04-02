@@ -111,7 +111,7 @@ int GameBoard::move() {
   if (node->rating!=-rating) {
          //TODO
          // logger->error("parents updated");
-        updateNode(node,choosen,true,0,0);
+        updateNode(node, true, 0);
         updateParents(0);
   }
 

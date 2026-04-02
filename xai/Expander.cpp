@@ -100,41 +100,28 @@ void Expander::multiExpand(TNode* startCursor) {
 
     // ====== ▶️ ФАЗА ВПЕРЁД ======
     for (int i = 0; i < MULTI_EXPAND_TIMES; ++i) {
-
         TMove move = expand(0, cursor);
-
-        // 🔥 ВОТ СЮДА
         addedPerStep[forwardCount] = lastCreated;
-
         totalAdded += lastCreated;
-
         if (move == 255 || !forward(move)) {
             break;
         }
-
         cursor = current()->node;
         ++forwardCount;
-
         if (std::abs(cursor->rating) > 8000)
             break;
     }
 
     // ====== ◀️ ФАЗА НАЗАД ======
     for (int i = 0; i < forwardCount; ++i) {
-
         CursorHistory* childH = current();
         TNode* child = childH->node;
-
         back();
-
         CursorHistory* parentH = current();
         TNode* parent = parentH->node;
-
-        // 🔥 ВОТ ЗДЕСЬ
         int stepIndex = forwardCount - 1 - i;
         int added = addedPerStep[stepIndex];
-
-        updateNode(parent, child, true, added, 0);
+        updateNode(parent, true, added);
     }
 
     // ====== финальный DAG-проброс ======

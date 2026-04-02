@@ -63,16 +63,16 @@ func (b *board) Reset(initial bool) {
 }
 
 func (b *board) ForceNextMove() {
-	b.gb.MoveClick()
+    b.gb.MoveClick()
 }
 
 func (b *board) ForceNextMoveNeuro() {
-	b.gb.MoveNeuroClick()
+    b.gb.MoveNeuroClick()
 }
 
 func (b *board) TakeBack() {
 
-	b.gb.TakeBackClick()
+    b.gb.TakeBackClick()
 
 	for r := 0; r < 15; r++ {
 		for c := 0; c < 15; c++ {
@@ -83,11 +83,9 @@ func (b *board) TakeBack() {
 }
 
 type boardIcon struct {
-	widget.BaseWidget
+	widget.Icon
 	board       *board
 	row, column int
-	rect        *canvas.Rectangle
-	icon        *canvas.Image // Используем напрямую картинку вместо виджета Icon
 }
 
 func (i *boardIcon) Tapped(ev *fyne.PointEvent) {
@@ -98,37 +96,23 @@ func (i *boardIcon) Tapped(ev *fyne.PointEvent) {
 	i.board.newClick(i.row, i.column)
 }
 
+func (i *boardIcon) Reset() {
 
-func newBoardIcon(row, column int, board *board) *boardIcon {
+	i.SetResource(nil)
+	i.Refresh()
+}
+
+func newBoardIcon(row, column int, board *board) fyne.CanvasObject {
+
 	i := &boardIcon{board: board, row: row, column: column}
 	i.ExtendBaseWidget(i)
-	i.rect = canvas.NewRectangle(color.Transparent)
-	i.rect.StrokeWidth = 1
-	i.rect.StrokeColor = theme.ForegroundColor()
-	i.icon = canvas.NewImageFromResource(nil) // Изначально пусто
-	i.icon.FillMode = canvas.ImageFillContain
+	i.SetResource(nil)
+	rect := canvas.NewRectangle(color.Transparent)
+	rect.StrokeColor = theme.ForegroundColor()
+	rect.StrokeWidth = 1
 	board.icons[row][column] = i
-	return i
-}
+	return container.NewStack(rect, i)
 
-// CreateRenderer определяет, как выглядит виджет
-func (i *boardIcon) CreateRenderer() fyne.WidgetRenderer {
-	content := container.NewStack(i.rect, i.icon)
-	return widget.NewSimpleRenderer(content)
-}
-
-// Refresh вызывается системой автоматически при смене темы
-func (i *boardIcon) Refresh() {
-	// 1. Обновляем цвет рамки (черный в светлой / белый в темной)
-	i.rect.StrokeColor = theme.ForegroundColor()
-	i.rect.Refresh()
-
-	// 2. Обновляем саму иконку (X или O)
-	// Fyne сам перекрасит theme.CancelIcon(), если тема изменилась
-	i.icon.Refresh()
-
-	// 3. Обновляем весь виджет
-	i.BaseWidget.Refresh()
 }
 
 func sync(b *board, sd *StatusController) {
@@ -136,6 +120,12 @@ func sync(b *board, sd *StatusController) {
 	if b.finished {
 		return
 	}
+
+	// Example of updating from outside in main.go
+	//go func() {
+	//	statusData.Lines[0].Set("Game Engine Ready")
+	//	statusData.Lines[1].Set("Connected to Server")
+	//}()
 
 	xb := b.gb
 
@@ -182,18 +172,18 @@ func sync(b *board, sd *StatusController) {
 				b.pieces[r][c] = code
 				lastMove := b.icons[r][c]
 
-                if code > 0 {
-                    lastMove.SetIcon(theme.CancelIcon())
-                    b.expectX = false
-                    addedCount++
+				if code > 0 {
+					lastMove.SetResource(theme.CancelIcon())
+					b.expectX = false
+					addedCount++
 
-                } else if code < 0 {
-                    lastMove.SetIcon(theme.RadioButtonIcon())
-                    b.expectO = false
-                    addedCount++
-                } else {
-                    lastMove.ResetIcon()
-                }
+				} else if code < 0 {
+					lastMove.SetResource(theme.RadioButtonIcon())
+					b.expectO = false
+					addedCount++
+ 				} else {
+				    lastMove.Reset()
+				}
 
 				if b.humanX == (code < 0) {
 
@@ -218,33 +208,24 @@ func sync(b *board, sd *StatusController) {
 
 	if b.displayedMovesCount >= 9 {
 
-		hasWinner := xb.GetRResult() >= 32600
+		hasWinner := xb.GetRResult() >= 32600 //|| xb.ResultRecieved <= -32600
 
 		if hasWinner {
 			number := string((b.displayedMovesCount % 2) + 49) // Number 1 is ascii #49 and 2 is ascii #50.
 			dialog.ShowInformation("Player "+number+" has won!", "Congratulations to player "+number+" for winning.", fyne.CurrentApp().Driver().AllWindows()[0])
 			b.finished = true
 		}
+
+// 		if b.displayedMovesCount == 225 {
+// 			dialog.ShowInformation("It is a tie!", "Nobody has won. Better luck next time.", fyne.CurrentApp().Driver().AllWindows()[0])
+// 			b.finished = true
+// 		}
 		return
 	}
 }
 
 func syncPeriodic(b *board, sd *StatusController) {
-	ticker := time.NewTicker(time.Millisecond * 400)
-	defer ticker.Stop()
-	for range ticker.C {
-		fyne.Do(func() {
-			sync(b, sd)
-		})
+	for range time.Tick(time.Millisecond * 400) {
+		sync(b, sd)
 	}
-}
-
-func (i *boardIcon) SetIcon(res fyne.Resource) {
-	i.icon.Resource = res
-	i.Refresh()
-}
-
-func (i *boardIcon) ResetIcon() {
-	i.icon.Resource = nil
-	i.Refresh()
 }
