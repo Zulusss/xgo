@@ -66,7 +66,7 @@ protected:
   TMove moves[fsize*fsize]; //ordered history of moves
 
   TMove kl[fsize*fsize]; // moves on field
-  bool isAlllowed(TMove N);
+  bool isAllowed(TMove N);
 
 private:
         int cnt;

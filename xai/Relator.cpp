@@ -24,9 +24,8 @@ TNode* Relator::getChild(TNode *parent, TMove childMove) {
 void Relator::calculateChilds() {
     childs.count = 0;
     TNode *node = current()->node;
-    bool mode1 = gameMode == 1 &&  count == 2;
     for (TMove i = 0; i < TOTAL_CELLS; ++i) {
-        if (mode1 ? kl[i]<=1 && isPerspectiveChildMode1(i) : isPerspectiveChild(i)) {
+        if (isPerspectiveChild(i)) {
             TNode* n = getChild(node, i);
             if (n != NULL) {
                 childs.move[childs.count] = i;
@@ -196,7 +195,7 @@ TNode* Relator::getParent(TNode *node, TMove move) {
 
 //----------------------------------------------------------------------------
 bool Relator::isPerspectiveChild(TMove move) {
-    return kl[move]==1;
+    return (gameMode == 1 && count == 2) ? isPerspectiveChildMode1(move) : kl[move]==1;
 }
 
 //----------------------------------------------------------------------------

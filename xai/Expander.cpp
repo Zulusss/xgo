@@ -209,7 +209,6 @@ TMove Expander::expand(int startPass, TNode* cursor) {
 void Expander::findMovesToExpand(int startPass) {
     newChilds.count = 0;
     otherNewChilds.count = 0;
-    bool mode1 = (gameMode == 1 && count == 2);
     CursorHistory *h = current();
     TNode* curr = h->node;
 
@@ -259,9 +258,8 @@ void Expander::findMovesToExpand(int startPass) {
 
                     // Проверка: клетка должна быть пустой (kl[m] & 3 == 0) и разрешенной
                     if ((kl[m] & 12) == 0) {
-                        if ((kl[m] == 1 && mode1 ? isPerspectiveChildMode1(m) : isPerspectiveChild(m)) && isAlllowed(m)) {
+                        if (isPerspectiveChild(m) && isAllowed(m)) {
                             addChildNoDupe(curr, m);
-
                         }
                     }
 
@@ -308,7 +306,7 @@ void Expander::findMovesToExpand(int startPass) {
 
     // 2. Общий сбор ходов (выполняется если атак нет)
     for (TMove i = 0; i < TOTAL_CELLS; ++i) {
-        if ((kl[i] == 1 && mode1 ? isPerspectiveChildMode1(i) : isPerspectiveChild(i)) && isAlllowed(i)) {
+        if (isPerspectiveChild(i) && isAllowed(i)) {
             addChild(curr, i);
         }
     }
