@@ -30,11 +30,11 @@ struct GomokuNet : torch::nn::Module {
     }
 
     torch::Tensor forward(torch::Tensor x) {
-        x = torch::relu(bn1->forward(conv1->forward(x)));
-        x = torch::relu(bn2->forward(conv2->forward(x)));
-        x = torch::relu(bn3->forward(conv3->forward(x)));
+        x = torch::tanh(bn1->forward(conv1->forward(x)));
+        x = torch::tanh(bn2->forward(conv2->forward(x)));
+        x = torch::tanh(bn3->forward(conv3->forward(x)));
         x = x.view({x.size(0), -1});
-        return fc->forward(x); // Убрали tanh, MSE лучше работает с сырыми числами
+        return fc->forward(x);
     }
 
     torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
