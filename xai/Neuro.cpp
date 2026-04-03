@@ -1,4 +1,5 @@
 //---------------------------------------------------------------------------
+
 #include <iostream>
 #include <fstream>
 #include <thread>
@@ -12,108 +13,145 @@
 #pragma package(smart_init)
 
 
-// Архитектура сети
+// ==========================================================
+// Новая архитектура сети (БЕЗ огромного Linear слоя)
+// ==========================================================
 struct GomokuNet : torch::nn::Module {
+
     GomokuNet() {
-        // Увеличиваем фильтры до 64 и добавляем BatchNorm
-        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(1, 64, 3).padding(1)));
+        // Вход: 3 канала (мои, чужие, чей ход)
+
+        conv1 = register_module("conv1",
+            torch::nn::Conv2d(torch::nn::Conv2dOptions(3, 64, 3).padding(1)));
         bn1 = register_module("bn1", torch::nn::BatchNorm2d(64));
 
-        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)));
+        conv2 = register_module("conv2",
+            torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)));
         bn2 = register_module("bn2", torch::nn::BatchNorm2d(64));
 
-        conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 128, 3).padding(1)));
+        conv3 = register_module("conv3",
+            torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 128, 3).padding(1)));
         bn3 = register_module("bn3", torch::nn::BatchNorm2d(128));
 
-        // Линейный слой без tanh на конце
-        fc = register_module("fc", torch::nn::Linear(128 * 15 * 15, 225));
+        // 🔥 ВАЖНО: заменяем Linear на 1x1 свертку
+        // Это даёт 1 канал (карта оценок)
+        conv_out = register_module("conv_out",
+            torch::nn::Conv2d(torch::nn::Conv2dOptions(128, 1, 1)));
     }
 
     torch::Tensor forward(torch::Tensor x) {
         x = torch::tanh(bn1->forward(conv1->forward(x)));
         x = torch::tanh(bn2->forward(conv2->forward(x)));
         x = torch::tanh(bn3->forward(conv3->forward(x)));
+
+        x = conv_out->forward(x); // [B,1,15,15]
+
+        // разворачиваем в [B,225]
         x = x.view({x.size(0), -1});
-        return fc->forward(x);
+        return x;
     }
 
-    torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
+    torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr}, conv_out{nullptr};
     torch::nn::BatchNorm2d bn1{nullptr}, bn2{nullptr}, bn3{nullptr};
-    torch::nn::Linear fc{nullptr};
 };
 
+
+// ==========================================================
+// Конструктор
+// ==========================================================
 Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
         : GameBoard(s, h, gameMode){
 
-    #ifdef __linux__
-        setenv("NNPACK_MODE", "0", 1); 
-    #endif
-    
+#ifdef __linux__
+    setenv("NNPACK_MODE", "0", 1);
+#endif
+
     lossTracker = new LossTracker(3000);
 
     trainedFieldCount = 0;
     trainedSingleCount = 0;
     skipTrainFieldCount = 0;
 
-    // // 1. Отключаем использование NNPACK для всех операций
-    // at::set_num_threads(1); // Для 15x15 одного потока за глаза, это уберет лишние проверки CPU
-
-    // // 2. Глобальный флаг отключения оптимизаций, вызывающих NNPACK
-    // // (актуально для сверточных сетей на CPU)
-    // torch::set_num_threads(1);
-
-    // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-    // Получаем количество ядер вашего процессора (например, 8 или 16)
     int threads = std::thread::hardware_concurrency();
-    if (threads == 0) threads = 4; // подстраховка
+    if (threads == 0) threads = 4;
 
-    // Устанавливаем многопоточность для LibTorch
-    at::set_num_threads(threads); 
+    at::set_num_threads(threads);
     torch::set_num_threads(threads);
-    // -----------------------
 
     model = std::make_shared<GomokuNet>();
-    optimizer = std::make_unique<torch::optim::Adam>(model->parameters(), torch::optim::AdamOptions(1e-4));
+    optimizer = std::make_unique<torch::optim::Adam>(
+        model->parameters(),
+        torch::optim::AdamOptions(1e-4)
+    );
 
-    // Пытаемся загрузить существующую модель
+    // загрузка модели
     std::ifstream file("gomoku_model.pt");
     if (file.good()) {
         try {
             torch::load(model, "gomoku_model.pt");
 
-            bool opt = std::ifstream("gomoku_optimizer.pt").good();
-            // Опционально: загрузка оптимизатора, если сохраняли его
-            if (opt) {
+            if (std::ifstream("gomoku_optimizer.pt").good()) {
                 torch::load(*optimizer, "gomoku_optimizer.pt");
             }
-            std::cout << "[AI] Загружена обученная модель из файла. "
-                << (opt ? " +optimizer " : "") << std::endl;
+
+            std::cout << "[AI] Модель загружена" << std::endl;
         } catch (...) {
-            std::cout << "[AI] Файл модели поврежден, начинаем обучение с нуля." << std::endl;
+            std::cout << "[AI] Ошибка загрузки, начинаем заново" << std::endl;
         }
     } else {
-        std::cout << "[AI] Файл модели не найден, создана новая сеть." << std::endl;
+        std::cout << "[AI] Новая сеть" << std::endl;
     }
-};
+}
 
 
-//==================================================================
-
-// Реализация метода подготовки данных (теперь он видит тип torch::Tensor)
+// ==========================================================
+// Новый вход: 3 канала
+// ==========================================================
 torch::Tensor Neuro::getTensorFromField() {
+
     auto options = torch::TensorOptions().dtype(torch::kFloat32);
-    auto t = torch::zeros({1, 1, 15, 15}, options);
+
+    // [batch, channels, H, W]
+    auto t = torch::zeros({1, 3, 15, 15}, options);
     float* data = t.data_ptr<float>();
-    TMove cm = current()->move;
+
+    bool myTurn = (count % 2 == 0); // крестик ходит
 
     for (int i = 0; i < 225; ++i) {
-        if (kl[i] == 1) data[i] = 1.0f;
-        else if (kl[i] == 2) data[i] = -1.0f;
-        else data[i] = 0.0f;
-    }
-    return t;
-};
 
+        int y = i / 15;
+        int x = i % 15;
+
+        int idx_my   = 0 * 225 + i;
+        int idx_op   = 1 * 225 + i;
+        int idx_turn = 2 * 225 + i;
+
+        // канал 3: чей ход
+        data[idx_turn] = myTurn ? 1.0f : 0.0f;
+
+        if (kl[i] == 1) {
+            // крестик
+            if (myTurn)
+                data[idx_my] = 1.0f;
+            else
+                data[idx_op] = 1.0f;
+        }
+        else if (kl[i] == 2) {
+            // нолик
+            if (!myTurn)
+                data[idx_my] = 1.0f;
+            else
+                data[idx_op] = 1.0f;
+        }
+    }
+
+    return t;
+}
+
+
+// ==========================================================
+// Обучение (почти без изменений)
+// ==========================================================
 void Neuro::trainNetworkOnCurrentPosition() {
     // 1. Проверка на повторное обучение той же позиции
     static TNode* prev[250] = { nullptr };
@@ -135,6 +173,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // 3. Заполнение таргетов и маски
     for (int i = 0; i < 225; ++i) {
+
         if (kl[i] > 1) {
             // Клетка занята: фиксируем штраф, чтобы сеть не предлагала туда ходить
             targetRatings[0][i] = -1.0f;
@@ -289,40 +328,38 @@ int Neuro::moveNeuro() {
 };
 
 TMove Neuro::predictBestMove() {
+
     torch::NoGradGuard no_grad;
     model->eval();
 
-    torch::Tensor input = getTensorFromField();
-    // Убираем размерность батча, делаем плоский вектор 225
-    torch::Tensor output = model->forward(input).view({-1});
+    torch::Tensor output = model->forward(getTensorFromField()).view({-1});
 
-    TNode *node = current()->node;
-    // 1. Применяем маску занятых клеток
+    // маска занятых клеток
     for (int i = 0; i < 225; ++i) {
-        if (kl[i] > 1) {
-            output[i] = -2.0f; // Занято -> худший возможный рейтинг
-        } else if (kl[i] == 0) {
-            output[i] = -1.1f;// слишком далеко от других камней
-        } else if (!isExpected(node, i)) {
-            output[i] = -1.0f;
-        }
+        if (kl[i] > 1)
+            output[i] = -2.0f;
     }
 
-    // 2. Выбираем лучший из ОСТАВШИХСЯ
     int64_t bestMoveIdx = output.argmax(0).item<int64_t>();
 
     model->train();
     return (TMove)bestMoveIdx;
-};
+}
 
+
+// ==========================================================
+// Получение рейтинга
+// ==========================================================
 TRating Neuro::getNNRating(TMove move) {
+
     torch::NoGradGuard no_grad;
     model->eval();
 
     auto output = model->forward(getTensorFromField());
+
     float normVal = output[0][(int)move].item<float>();
 
     model->train();
-    // Возвращаем в ваш масштаб
+
     return (TRating)(normVal * 32768.0f);
-};
+}
