@@ -334,10 +334,21 @@ TMove Neuro::predictBestMove() {
 
     torch::Tensor output = model->forward(getTensorFromField()).view({-1});
 
-    // маска занятых клеток
+    TNode *node = current()->node;
+    // 🔥 Отфильтровываем неликвиды
     for (int i = 0; i < 225; ++i) {
-        if (kl[i] > 1)
+        if (kl[i] > 1) {
+            // клетка занята — худший вариант
             output[i] = -2.0f;
+        }
+        else if (kl[i] == 0) {
+            // далеко от игры
+            output[i] = -1.1f;
+        }
+        else if (!isExpected(node, i)) {
+            // неинтересный ход
+            output[i] = -1.0f;
+        }
     }
 
     int64_t bestMoveIdx = output.argmax(0).item<int64_t>();
@@ -345,7 +356,6 @@ TMove Neuro::predictBestMove() {
     model->train();
     return (TMove)bestMoveIdx;
 }
-
 
 // ==========================================================
 // Получение рейтинга
