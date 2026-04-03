@@ -196,7 +196,7 @@ void Grower::grow() {
             restartRequested = false;
             //restart();
             goBack(1);
-            std::cout << "restarted" << std::endl;
+            //std::cout << "restarted" << std::endl;
         } else if (userMoveRequested != 255) {
                 int i;
                 bool res = put(userMoveRequested);

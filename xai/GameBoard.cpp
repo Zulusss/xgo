@@ -31,7 +31,7 @@ bool GameBoard::put(TMove N) {
                     swapX = !swapX;
             }
         }
-        logger->log("swapped X");
+        //logger->log("swapped X");
     }
     if ((  history[count-1].symmY  == 0 || history[count].symmXY  == 0) && y < 0) {
             y = -y;
@@ -40,7 +40,7 @@ bool GameBoard::put(TMove N) {
             } else {
                     swapY = !swapY;
             }
-            logger->log("swapped Y");
+            //logger->log("swapped Y");
     }
 
 
@@ -49,7 +49,7 @@ bool GameBoard::put(TMove N) {
             x = y;
             y = t;
             swapW = !swapW;
-            logger->log("swapped W");
+            //logger->log("swapped W");
     } else if (x+y<0 && history[count-1].symmXYW == 0) {
             int t = x;
             x = -y;
@@ -57,7 +57,7 @@ bool GameBoard::put(TMove N) {
             swapW = !swapW;
             swapX = !swapX;
             swapY = !swapY;
-            logger->log("swapped XYW");
+            //logger->log("swapped XYW");
     }
 
 

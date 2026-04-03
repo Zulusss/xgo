@@ -107,6 +107,9 @@ private:
     void save(float loss);
     TMove predictBestMove();
     TRating getNNRating(TMove move);
+
+    inline float encodeRating(TRating r);
+    inline TRating decodeRating(float v);
 };
 
 #endif

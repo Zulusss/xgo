@@ -44,7 +44,7 @@ struct GomokuNet : torch::nn::Module {
         x = torch::tanh(bn2->forward(conv2->forward(x)));
         x = torch::tanh(bn3->forward(conv3->forward(x)));
 
-        x = conv_out->forward(x); // [B,1,15,15]
+        x = torch::tanh(conv_out->forward(x)); // [B,1,15,15]
 
         // разворачиваем в [B,225]
         x = x.view({x.size(0), -1});
@@ -86,7 +86,7 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
     model = std::make_shared<GomokuNet>();
     optimizer = std::make_unique<torch::optim::Adam>(
         model->parameters(),
-        torch::optim::AdamOptions(1e-4)
+        torch::optim::AdamOptions(3e-4)
     );
 
     // загрузка модели
@@ -155,72 +155,84 @@ torch::Tensor Neuro::getTensorFromField() {
 
 
 // ==========================================================
-// Обучение (почти без изменений)
+// Обучение на множестве клеток текущей позиции
 // ==========================================================
 void Neuro::trainNetworkOnCurrentPosition() {
-    // 1. Проверка на повторное обучение той же позиции
+
     static TNode* prev[250] = { nullptr };
     TNode *par = current()->node;
+
     if (count > 3 && prev[count] == par) {
         ++skipTrainFieldCount;
         return;
     }
     prev[count] = par;
 
-    // 2. Подготовка входных данных
     torch::Tensor input = getTensorFromField();
-
-    // Создаем таргеты и маску (все во float32)
     auto targetRatings = torch::zeros({1, 225});
-    auto mask = torch::zeros({1, 225});
 
-    int knownNodesCount = 0;
+    int knownCount = 0, knownCount2 = 0, knownCount3 = 0;
 
-    // 3. Заполнение таргетов и маски
     for (int i = 0; i < 225; ++i) {
 
         if (kl[i] > 1) {
-            // Клетка занята: фиксируем штраф, чтобы сеть не предлагала туда ходить
+            // занятая клетка → сильно плохая
             targetRatings[0][i] = -1.0f;
-            mask[0][i] = 1.0f;
         }
         else {
             TNode* node = getChild(par, i);
+
             if (node) {
-                // Данные из дерева поиска (самые ценные)
-                targetRatings[0][i] = (float)(node->rating / 32768.0f);
-                mask[0][i] = 1.0f;
-                knownNodesCount++;
+                // реальные данные
+                targetRatings[0][i] = encodeRating(node->rating);
+                knownCount++;
             }
-            // Все остальные клетки игнорируем (mask = 0).
-            // Это решает проблему высокого Loss на пустых полях.
+            else {
+                // ЭВРИСТИКА для неизвестной клетки
+                float heuristic = -encodeRating(par->rating);
+
+                if (par->x3 || par->x4 || par->o3 || par->o4) {
+                    if (kl[i] == 1)
+                        heuristic = -0.8f < heuristic ? -0.8f : heuristic;
+                    else
+                        heuristic = -0.9f < heuristic ? -0.9f : heuristic;
+                    knownCount3++;
+                }
+                else if (kl[i] == 1) {
+                    heuristic = -0.6f < heuristic ? -0.6f : heuristic;
+                    knownCount2++;
+                }
+                else {
+                    // далеко от игры
+                    if (par->o2 > 5 || par->x2 > 5)
+                        heuristic = -0.8f < heuristic ? -0.8f : heuristic;
+                    else
+                        heuristic = -0.7f < heuristic ? -0.7f : heuristic;
+                    knownCount3++;
+                }
+
+                targetRatings[0][i] = heuristic;
+            }
         }
     }
 
-    // 4. Шаг обучения
     model->train();
     optimizer->zero_grad();
 
     auto output = model->forward(input);
 
-    // Считаем MSE вручную только для маскированных элементов
-    // (выход - цель)^2 * маска
-    auto loss_map = torch::pow(output - targetRatings, 2) * mask;
-
-    // Средний лосс только по активным клеткам (чтобы не делить на 225)
-    auto loss = loss_map.sum() / (mask.sum() + 1e-6);
+    // 🔥 loss теперь без весов, просто среднее по всем клеткам
+    auto loss = torch::pow(output - targetRatings, 2).sum() / 225.0f;
 
     loss.backward();
     optimizer->step();
 
-    // 5. Логирование
     static int iter = 0;
-    if (++iter % 2000 == 0 || count <= 1) {
-        std::cout << "[AI] Полевое обучение: Ход: " << (int)count
-                  << " | Обучено клеток: " << knownNodesCount
-                  << " / " << (int)par->totalDirectChilds
-                  << " | Loss: " << loss.item<float>()
-                  << " | Avg.Loss: " << lossTracker->toLossString()
+    if (++iter % 4000 == 0) {
+        std::cout << "[AI] Полевое обучение: move=" << (int)count
+                  << " known=" << knownCount << " / " << knownCount2 << " / " << knownCount3
+                  << " loss=" << loss.item<float>()
+                  << " avg=" << lossTracker->toLossString()
                   << std::endl;
     }
 
@@ -260,7 +272,7 @@ void Neuro::save(float loss) {
 void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
     // 1. Подготовка данных
     torch::Tensor input = getTensorFromField();
-    float normRating = (float)rating / 32768.0f;
+    float normRating =  encodeRating(rating);
 
     // 2. Включаем режим обучения
     model->train();
@@ -284,11 +296,13 @@ void Neuro::trainNetworkOnSingleMove(TMove move, TRating rating) {
 
     // 7. Логирование и статистика
     ++trainedSingleCount;
-    if (trainedSingleCount % 2000 == 0 || count < 4) {
+    if (trainedSingleCount % 10000 == 0 || count < 4) {
         std::cout << "[AI] Точечное обучение: Ход " << (int)count
-                  << " | Индекс: " << (int)move
+                  << " | Ход: " << (int)move
                   << " | Рейтинг: " << rating
-                  << " | Loss: " << loss.item<float>() << std::endl;
+                  << " | Loss: " << loss.item<float>()
+                  << " | Avg.Loss: " << lossTracker->toString()
+                  << std::endl;
     }
 
     // Сохраняем состояние (опционально, если loss не слишком шумный)
@@ -339,20 +353,26 @@ TMove Neuro::predictBestMove() {
 
     torch::Tensor output = model->forward(getTensorFromField()).view({-1});
 
+    static int iter = 0;
+    if (++iter % 25 == 0)
+            std::cout << "out min/max: "
+              << output.min().item<float>() << " / "
+              << output.max().item<float>() << std::endl;
+
     TNode *node = current()->node;
     // 🔥 Отфильтровываем неликвиды
     for (int i = 0; i < 225; ++i) {
         if (kl[i] > 1) {
             // клетка занята — худший вариант
-            output[i] = -2.0f;
+            output[i] = -1.0f;
         }
         else if (kl[i] == 0) {
             // далеко от игры
-            output[i] = -1.1f;
+            output[i] = -0.9f;
         }
         else if (!isExpected(node, i)) {
             // неинтересный ход
-            output[i] = -1.0f;
+            output[i] = -0.8f;
         }
     }
 
@@ -376,5 +396,35 @@ TRating Neuro::getNNRating(TMove move) {
 
     model->train();
 
-    return (TRating)(normVal * 32768.0f);
+    return decodeRating(normVal);
+}
+
+inline float Neuro::encodeRating(TRating r) {
+    float rf = (float)r;
+    float sign = rf >= 0 ? 1.0f : -1.0f;
+    float absr = std::abs(rf);
+
+    if (absr <= 8192.0f)
+        return sign * (absr * 3.0f / 32768.0f);
+    else
+        return sign * ((8192.0f * 3.0f + (absr - 8192.0f) / 3.0f) / 32768.0f);
+}
+inline TRating Neuro::decodeRating(float v) {
+    float sign = v >= 0 ? 1.0f : -1.0f;
+    float absv = std::abs(v) * 32768.0f;
+
+    float r;
+
+    if (absv <= 8192.0f * 3.0f)
+        r = absv / 3.0f;
+    else
+        r = 8192.0f + (absv - 8192.0f * 3.0f) * 3.0f;
+
+    r *= sign;
+
+    // 🔥 защита от выхода за пределы short
+    if (r > 32767.0f) r = 32767.0f;
+    if (r < -32768.0f) r = -32768.0f;
+
+    return (TRating)r;
 }
