@@ -68,12 +68,17 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
 
     lossTracker = new LossTracker(3000);
 
+    trackerNX = new LossTracker(30);
+    trackerNO = new LossTracker(30);
+    trackerLX = new LossTracker(30);
+    trackerLO = new LossTracker(30);
+
     trainedFieldCount = 0;
     trainedSingleCount = 0;
     skipTrainFieldCount = 0;
 
-    int threads = std::thread::hardware_concurrency();
-    if (threads == 0) threads = 4;
+    int threads = 1;//std::thread::hardware_concurrency();
+    //if (threads == 0) threads = 4;
 
     at::set_num_threads(threads);
     torch::set_num_threads(threads);
@@ -210,12 +215,12 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // 5. Логирование
     static int iter = 0;
-    if (++iter % 200 == 0 || count < 4) {
+    if (++iter % 2000 == 0 || count <= 1) {
         std::cout << "[AI] Полевое обучение: Ход: " << (int)count
                   << " | Обучено клеток: " << knownNodesCount
                   << " / " << (int)par->totalDirectChilds
                   << " | Loss: " << loss.item<float>()
-                  << " | Avg.Loss: " << lossTracker->toString()
+                  << " | Avg.Loss: " << lossTracker->toLossString()
                   << std::endl;
     }
 

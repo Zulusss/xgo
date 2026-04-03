@@ -46,6 +46,23 @@ std::string toString() const {
     std::stringstream ss;
 
     if (movingAverage == 0.0f) {
+        ss << "0";
+    } else {
+        // Находим позицию первой значащей цифры после запятой
+        // Если avg = 0.00123, то -log10(0.00123) ≈ 2.9, ceil ≈ 3.
+        // Прибавляем 1, чтобы получить 2 значащие цифры (3+1=4 знака после запятой).
+        int firstDigitPos = static_cast<int>(std::ceil(-std::log10(std::abs(movingAverage))));
+        if (firstDigitPos < 0) firstDigitPos = 0; // Если число > 1
+        int precision = firstDigitPos + 1; // 1 доп. знак после первого значащего
+        ss << std::fixed << std::setprecision(precision) << movingAverage;
+    }
+    return ss.str();
+}
+
+std::string toLossString() const {
+    std::stringstream ss;
+
+    if (movingAverage == 0.0f) {
         ss << "0, loss_cnt=" << count;
     } else {
         // Находим позицию первой значащей цифры после запятой
@@ -77,17 +94,19 @@ protected:
     int trainedSingleCount;
     int skipTrainFieldCount;
 
-    // 2. Указатели на нейросеть и оптимизатор
-    std::shared_ptr<GomokuNet> model;
-    std::unique_ptr<torch::optim::Adam> optimizer;
-    torch::Tensor getTensorFromField();
-    TMove predictBestMove();
+    LossTracker *trackerNX, *trackerNO, *trackerLX, *trackerLO;
 
 private:
     LossTracker *lossTracker;
-    TRating getNNRating(TMove move);
-    void save(float loss);
 
+    //Указатели на нейросеть и её оптимизатор
+    std::shared_ptr<GomokuNet> model;
+    std::unique_ptr<torch::optim::Adam> optimizer;
+    torch::Tensor getTensorFromField();
+
+    void save(float loss);
+    TMove predictBestMove();
+    TRating getNNRating(TMove move);
 };
 
 #endif

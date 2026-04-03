@@ -142,30 +142,35 @@ void Grower::grow() {
                     bool neuroWon = (neuroMovedLast == (lastRating > 0));
 
                     if (neuroWon) {
-                        std::cout << "[RESTART] Reason: Neuro WON ("
-                            //<< (neuroPlaysO ? "O" : "X")
-                            << " Count: " << this->count
-                            << " Rating: "
-                            << lastRating
-                            //<< " neuroPlaysO: " << neuroPlaysO
-                            //<< " neuroMovedLast: " << neuroMovedLast
-                            << ")" << std::endl;
+                        std::cout << "[RESTART] Reason: Neuro WON (";
                         neuroWinsCount++;
+                        if (neuroPlaysO) {
+                            trackerNO->addLoss(this->count);
+                        } else {
+                            trackerNX->addLoss(this->count);
+                        }
                     } else {
-                        std::cout << "[RESTART] Reason: Legacy WON ("
-                            //<< (neuroPlaysO ? "X" : "O")
-                            << " Count: " << this->count
-                            << " Rating: "
-                            << lastRating << ")" << std::endl;
+                        std::cout << "[RESTART] Reason: Legacy WON (";
                         regularWinsCount++;
+                        if (neuroPlaysO) {
+                            trackerLX->addLoss(this->count);
+                        } else {
+                            trackerLO->addLoss(this->count);
+                        }
                     }
                 }
 
-                // Вывод счета при каждом рестарте
-                std::cout << "CURRENT SCORE -> Neuro: " << neuroWinsCount
+                std::cout << " Count: " << this->count
+                          << " Rating: "
+                          << lastRating << ")"
+                          << " CURRENT SCORE -> Neuro: " << neuroWinsCount
                           << " | Legacy: " << regularWinsCount
-                          << " | Draws: " << drawsCount << std::endl;
-
+                          << " | Draws: " << drawsCount
+                          << " Avg.Age, NX/NO/LX/LO: "
+                          << trackerNX->toString() << '/'
+                          << trackerNO->toString() << '/'
+                          << trackerLX->toString() << '/'
+                          << trackerLO->toString() << std::endl;
                 // Смена ролей и сброс
                 if (neuroPlays) neuroPlaysO = !neuroPlaysO;
                 //std::cout << "Requested restart. Neuro next: " << (neuroPlaysO ? "O" : "X") << std::endl;
