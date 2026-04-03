@@ -167,9 +167,9 @@ void Grower::grow() {
                           << " | Legacy: " << regularWinsCount
                           << " | Draws: " << drawsCount
                           << " Avg.Age, NX/NO/LX/LO: "
-                          << trackerNX->toString() << '/'
-                          << trackerNO->toString() << '/'
-                          << trackerLX->toString() << '/'
+                          << trackerNX->toString() << " / "
+                          << trackerNO->toString() << " / "
+                          << trackerLX->toString() << " / "
                           << trackerLO->toString() << std::endl;
                 // Смена ролей и сброс
                 if (neuroPlays) neuroPlaysO = !neuroPlaysO;

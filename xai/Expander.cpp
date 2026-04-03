@@ -355,7 +355,7 @@ bool Expander::isExpected(TNode* curr, TMove i) {
             return false;
         }
     }
-    else if (curr->x2 > 0 && curr->rating < 2400) {
+    else if (curr->x2 > 0 && curr->rating < 1800 && count > 4) {
         if (scanlines(4, t, i) <= 0 && scanlines(5, t, i) <= 0) {
             //filter out nodes which not allows to build 3 or 4,
             //only if parent rating is not too high,
