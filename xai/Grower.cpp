@@ -130,6 +130,8 @@ void Grower::grow() {
 
                 bool xWon = this->count % 2 == lastRating > 0;
 
+                bool log = (drawsCount+neuroWinsCount+regularWinsCount) % 4 == 0;
+
                 if (!isWin) {
                     std::cout << "[RESTART] Reason: DRAW" << std::endl;
                     drawsCount++;
@@ -144,16 +146,18 @@ void Grower::grow() {
                     bool neuroWon = (neuroMovedLast == (lastRating > 0));
 
                     if (neuroWon) {
-                        std::cout << "[RESTART] Reason: Neuro WON (";
                         neuroWinsCount++;
+                        if (log) std::cout << "[RESTART] Reason: Neuro WON (";
+
                         if (neuroPlaysO) {
                             trackerNO->addLoss(this->count);
                         } else {
                             trackerNX->addLoss(this->count);
                         }
                     } else {
-                        std::cout << "[RESTART] Reason: Legacy WON (";
                         regularWinsCount++;
+                        if (log) std::cout << "[RESTART] Reason: Legacy WON (";
+
                         if (neuroPlaysO) {
                             trackerLX->addLoss(this->count);
                         } else {
@@ -163,7 +167,7 @@ void Grower::grow() {
 
                 }
 
-                std::cout << (xWon ? " X " : " O ")
+                if (log) std::cout << (xWon ? " X " : " O ")
                           << " Count: " << this->count
                           << " Rating: "
                           << lastRating << ")"
@@ -201,8 +205,8 @@ void Grower::grow() {
         //********* STEP 2   process requested actions ***************
         if (restartRequested) {
             restartRequested = false;
-            //restart();
-            goBack(1);
+            //goBack(1);
+            restart();
             //std::cout << "restarted" << std::endl;
         } else if (userMoveRequested != 255) {
                 int i;

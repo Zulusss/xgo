@@ -116,8 +116,7 @@ private:
     torch::Tensor getTensorFromField();
 
     void save(float loss);
-    void addSample();
-    void updateSample(TMove move);
+    void addSample(TMove move);
     TMove predictBestMove();
     TRating getNNRating(TMove move);
     inline float decodeRating(int rating);

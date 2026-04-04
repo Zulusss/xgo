@@ -76,10 +76,11 @@ void Relator::updateParents(TNode *node, int removed, int removedFromEnd,
                     : false,
                 updateRating, i-1, addedChilds);
         } else {
-                if (i == max && onlyLastRemoved) {
-                        logger->error("no parent found");
-                        getParent(node, history[i].move);
-                }
+// TODO
+//                if (i == max && onlyLastRemoved) {
+//                        logger->error("no parent found");
+//                        getParent(node, history[i].move);
+//                }
         }
     }
 };
@@ -162,7 +163,7 @@ bool Relator::updateNode(TNode *node, bool updateRating, int addedChilds) {
 TNode* Relator::getParent(TNode *node, TMove move) {
 
    if (move == 112) {
-    printHistory("parent of 112", node);//must not happen
+    //printHistory("parent of 112", node);//must not happen - this is happening
     return NULL;
    }
 

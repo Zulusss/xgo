@@ -55,6 +55,10 @@ void Cursor::restart() {
   while(count > 1) {
      back();
   }
+  memset(kl,0,sizeof(TMove)*TOTAL_CELLS);
+  kl[112] = 4;
+  kl[113] = 1;
+  kl[128] = 1;
   //lastmove = first->node;
 }
 
@@ -201,9 +205,6 @@ bool Cursor::back() {
   for(int t=0; t<curr->enCount; t++)
         kl[curr->en[t]] = 0;
   --count;
-  if (current()->node == NULL) {
-        return false;
-  }
   return true;
 }
 
