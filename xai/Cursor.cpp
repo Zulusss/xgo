@@ -25,6 +25,7 @@ Cursor::Cursor(SimplyNumbers *simplyGen, Hashtable *movesHash) {
         this->simplyGen = simplyGen;
         this->movesHash = movesHash;
         memset(history,0,sizeof(CursorHistory)*TOTAL_CELLS);
+        memset(kl,0,sizeof(TMove)*TOTAL_CELLS);
         count = 0;
         count0 = 0;
         building = false;
