@@ -196,19 +196,25 @@ void Neuro::save(float loss) {
 void Neuro::addSample() {
     TrainSample sample;
     sample.state = getTensorFromField();
-    sample.move = -1;
-    sample.result = 0;
-    sample.isXTurn = (this->count % 2 == 0);// кто сейчас ходит:
+    sample.move = -1;                // пока ход не известен
+    sample.result = 0;               // результат ещё не известен
+    sample.isXTurn = (count % 2 == 0);
+    sample.node = current()->node;   // сохраняем ссылку на узел
     gameHistory.push_back(sample);
+}
 
+void Neuro::updateSample(TMove move) {
+    auto& sample = gameHistory.back();
+    sample.move = move;
+    sample.node = current()->node;
 }
 
 int Neuro::moveNeuro() {
 
-    //сохраняем в сэмпл ход легаси
+    //сохраняем в сэмпл предыдущий ход легаси
     if (count>1) {
         if (gameHistory.empty()) addSample();
-        gameHistory.back().move = current()->move;
+        updateSample(current()->move);
     }
 
     //готовим сэмпл для хода нейронки
@@ -220,9 +226,9 @@ int Neuro::moveNeuro() {
     put(move);
 
     //сохраняем сэмпл хода нейронки
-    gameHistory.back().move = move;
+    updateSample(move);
 
-    //готовим сэмпл для хода легаси
+    //готовим сэмпл для будущего хода легаси
     addSample();
 
     int rat = node->rating;
@@ -275,56 +281,59 @@ TMove Neuro::predictBestMove() {
 //}
 
 void Neuro::trainFromGame(bool lastPlayerWon) {
-    // Победитель = last player
-    float z = lastPlayerWon ? 1.0f : 0.0f;
     size_t n = gameHistory.size();
 
     for (size_t i = 0; i < n; ++i) {
-        // Определяем, какой игрок сделал ход (последний ход в истории — победитель)
         bool samePlayerAsWinner = ((n - 1 - i) % 2 == 0);
+        if (!samePlayerAsWinner) continue;
 
-        // Результат для value head всегда:
-        gameHistory[i].result = samePlayerAsWinner ? z : 1.0f - z;
+        // Победный ход игрока
+        gameHistory[i].result = lastPlayerWon ? 1.0f : 0.0f;
 
-        // Обучаем каждый сэмпл
-        trainSample(gameHistory[i], samePlayerAsWinner);
+        trainSample(gameHistory[i]);
     }
-
     gameHistory.clear();
 }
 
-void Neuro::trainSample(const TrainSample& s, bool isWinnerMove) {
+void Neuro::trainSample(const TrainSample& s) {
     model->train();
     optimizer->zero_grad();
 
     auto [policy, value] = model->forward(s.state);
 
-    // Value target всегда
-    auto target_value = torch::tensor({s.result}, torch::kFloat32).to(value.device());
-    auto value_loss = torch::mse_loss(value, target_value);
+    // 1️⃣ Преобразуем рейтинг узла
+    float nodeRating = decodeRating(s.node->rating);  // [-1,1]
 
-    // Policy target
-    torch::Tensor policy_loss = torch::tensor({0.0f}, torch::kFloat32).to(policy.device());
-    if (isWinnerMove && s.move >= 0) {
-        torch::Tensor target_policy = torch::zeros({1, 225}, torch::kFloat32).to(policy.device());
+    // 2️⃣ Комбинируем с финальным результатом партии
+    // s.result = 1.0 если игрок, который сделал этот ход, выиграл, иначе 0.0
+    const float alpha = 0.6f;  // вес рейтинга узла
+    float combinedValue = alpha * nodeRating + (1.0f - alpha) * s.result * 2.0f - 1.0f;
+
+    // Ограничиваем диапазон (важно для стабильности)
+    if (combinedValue > 1.0f) combinedValue = 1.0f;
+    else if (combinedValue < -1.0f) combinedValue = -1.0f;
+
+    // s.result = 1 → +1, s.result = 0 → -1, при alpha=0.6 даём преимущество рейтингу
+
+    auto target_value = torch::tensor({combinedValue}, torch::kFloat32).to(value.device());
+
+    // 3️⃣ Policy target
+    torch::Tensor target_policy = torch::zeros({1, 225}, torch::kFloat32).to(policy.device());
+    if (s.result > 0) {
         target_policy[0][s.move] = 1.0f;
-        policy_loss = -torch::sum(target_policy * torch::log(policy + 1e-6));
-    } else {
-        // Мягкий штраф за "далёкий" ход проигравшего
-        // Чтобы градиент не нулевой, увеличиваем веса для того, где ход не близко к центру
-        float penalty_scale = 0.01f; // можно подстроить
-        int y = s.move / 15;
-        int x = s.move % 15;
-        float dist = std::sqrt((y - 7)*(y - 7) + (x - 7)*(x - 7)) / 10.0f; // нормируем до ~1
-        policy_loss = penalty_scale * dist * torch::sum(policy);
     }
 
-    auto loss = value_loss + policy_loss;
+    auto policy_loss = torch::tensor({0.0f}, torch::kFloat32).to(policy.device());
+    if (s.result > 0) {
+        policy_loss = -torch::sum(target_policy * torch::log(policy + 1e-6));
+    }
+
+    auto value_loss = torch::mse_loss(value, target_value);
+    auto loss = policy_loss + value_loss;
 
     loss.backward();
     optimizer->step();
 
-    // Лог
     static int iter = 0;
     if (++iter % 500 == 0) {
         std::cout << "[AI] trainSample | loss=" << loss.item<float>()
@@ -334,4 +343,17 @@ void Neuro::trainSample(const TrainSample& s, bool isWinnerMove) {
     }
 
     save(loss.item<float>());
+}
+
+//---------------------------------------------------------------------------
+// Преобразуем рейтинг узла в диапазон [-1, +1]
+float Neuro::decodeRating(int rating) {
+    const float maxRating = 32768.0f;  // нормализация по максимальному ожидаемому рейтингу
+    float val = static_cast<float>(rating) / maxRating;
+
+    // Ограничиваем диапазон
+    if (val > 1.0f) val = 1.0f;
+    else if (val < -1.0f) val = -1.0f;
+
+    return val;
 }

@@ -84,8 +84,9 @@ std::string toLossString() const {
 struct TrainSample {
     torch::Tensor state;
     int move;
-    float result;
-    bool isXTurn; // 🔥 ВАЖНО
+    float result;// победа/поражение (0/1)
+    bool isXTurn;
+    TNode* node;
 };
 
 class Neuro : public GameBoard {
@@ -104,7 +105,7 @@ protected:
     LossTracker *trackerNX, *trackerNO, *trackerLX, *trackerLO;
 
     void trainFromGame(bool lastPlayerWon);
-    void trainSample(const TrainSample& s, bool learnPolicy);
+    void trainSample(const TrainSample& s);
 
 private:
     LossTracker *lossTracker;
@@ -116,8 +117,10 @@ private:
 
     void save(float loss);
     void addSample();
+    void updateSample(TMove move);
     TMove predictBestMove();
     TRating getNNRating(TMove move);
+    inline float decodeRating(int rating);
 
 };
 
