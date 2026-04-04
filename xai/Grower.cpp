@@ -122,11 +122,13 @@ void Grower::grow() {
         //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
         IF_TRAIN_READY {
             float lastRating = lastMove()->rating;
-            bool isWin = std::abs(lastRating) > 8000;
+            bool isWin = std::abs(lastRating) > 6500;
 
             // Условие перезапуска: победный рейтинг или лимит ходов
             if (this->count > 21 || (isWin && this->count > 1)) {
                 restartRequested = true;
+
+                bool xWon = this->count % 2 == lastRating > 0;
 
                 if (!isWin) {
                     std::cout << "[RESTART] Reason: DRAW" << std::endl;
@@ -158,9 +160,11 @@ void Grower::grow() {
                             trackerLO->addLoss(this->count);
                         }
                     }
+
                 }
 
-                std::cout << " Count: " << this->count
+                std::cout << (xWon ? " X " : " O ")
+                          << " Count: " << this->count
                           << " Rating: "
                           << lastRating << ")"
                           << " CURRENT SCORE -> Neuro: " << neuroWinsCount
@@ -171,6 +175,9 @@ void Grower::grow() {
                           << trackerNO->toString() << " / "
                           << trackerLX->toString() << " / "
                           << trackerLO->toString() << std::endl;
+
+                trainFromGame( lastRating > 0);
+
                 // Смена ролей и сброс
                 if (neuroPlays) neuroPlaysO = !neuroPlaysO;
                 //std::cout << "Requested restart. Neuro next: " << (neuroPlaysO ? "O" : "X") << std::endl;
