@@ -122,7 +122,12 @@ void Grower::grow() {
         //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
         IF_TRAIN_READY {
             float lastRating = lastMove()->rating;
-            bool isWin = std::abs(lastRating) > 6500;
+            bool isWin = std::abs(lastRating) > 6500 && this->count >= 5 || std::abs(lastRating) > 9000;
+            static bool neuroWithNeuro = false;
+            if (!neuroWithNeuro && drawsCount+neuroWinsCount > 10) {
+                neuroWithNeuro = true;
+                std::cout << "    Neuro vs Neuro mode activated!" << std::endl;
+            }
 
             // Условие перезапуска: победный рейтинг или лимит ходов
             if (this->count > 21 || (isWin && this->count > 1)) {
@@ -130,10 +135,10 @@ void Grower::grow() {
 
                 bool xWon = this->count % 2 == lastRating > 0;
 
-                bool log = (drawsCount+neuroWinsCount+regularWinsCount) % 4 == 0;
+                bool log = (drawsCount+neuroWinsCount+regularWinsCount+nnCount) % 9 == 0;
 
                 if (!isWin) {
-                    std::cout << "[RESTART] Reason: DRAW" << std::endl;
+                    if (log) std::cout << "[RESTART] Reason: DRAW (";
                     drawsCount++;
                 } else {
 
@@ -145,7 +150,17 @@ void Grower::grow() {
                     // 2. Она НЕ ходила последней и рейтинг отрицательный (соперник подставился)
                     bool neuroWon = (neuroMovedLast == (lastRating > 0));
 
-                    if (neuroWon) {
+                    if (neuroWithNeuro) {
+                        nnCount++;
+                        if (xWon) {
+                            trackerNO->addLoss(this->count);
+                            if (log) std::cout << "[RESTART] Reason: NX WON (";
+                        } else {
+                            trackerNX->addLoss(this->count);
+                            if (log) std::cout << "[RESTART] Reason: NO WON (";
+                        }
+                    }
+                    else if (neuroWon) {
                         neuroWinsCount++;
                         if (log) std::cout << "[RESTART] Reason: Neuro WON (";
 
@@ -164,7 +179,6 @@ void Grower::grow() {
                             trackerLO->addLoss(this->count);
                         }
                     }
-
                 }
 
                 if (log) std::cout << (xWon ? " X " : " O ")
@@ -189,7 +203,7 @@ void Grower::grow() {
             else if (lastMove()->totalChilds > childPerMove) {
                 // Выбор следующего игрока:
                 // Если count=0 (ход X) и neuroPlaysO=false — ходит нейросеть
-                if (neuroPlays && neuroPlaysO == (this->count % 2 != 0)) {
+                if (neuroPlays && (neuroWithNeuro || neuroPlaysO == (this->count % 2 != 0))) {
                     moveNeuroRequested = true;
                     //std::cout << "Requested neuro move " << (this->count%2?"(O)":"(X)") << std::endl;
 
@@ -285,7 +299,9 @@ void Grower::grow() {
         if (lastCount <  maxChilds
                         && currRating < 32300
                         && currRating > -32300) {
-          buildTree();
+          for (int i=0; i<10; ++i) {
+            buildTree();
+          }
           changed = false;
           ++count;
         } else {

@@ -40,25 +40,30 @@ struct GomokuNet : torch::nn::Module {
     }
 
     std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x) {
+        // --- общие conv слои ---
         x = torch::relu(conv1->forward(x));
         x = torch::relu(conv2->forward(x));
         x = torch::relu(conv3->forward(x));
 
-        // policy head (линейный, без ReLU)
+        // --- policy head (без ReLU) ---
         auto p = policy_conv->forward(x);
         p = p.view({p.size(0), -1});
         p = policy_fc->forward(p);
-        // softmax делаем отдельно при выборе хода
 
-        // value head
+        // --- value head ---
         auto v = torch::relu(value_conv->forward(x));
         v = v.view({v.size(0), -1});
         v = torch::relu(value_fc1->forward(v));
-        v = torch::tanh(value_fc2->forward(v));
+
+        // 🔥 Dropout только во время обучения
+        if (this->is_training()) {
+            v = torch::dropout(v, /*p=*/0.15, /*train=*/true); // оставляем 85% нейронов
+        }
+
+        v = torch::tanh(value_fc2->forward(v)); // [-1, 1]
 
         return {p, v};
     }
-
     torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
     torch::nn::Conv2d policy_conv{nullptr}, value_conv{nullptr};
     torch::nn::Linear policy_fc{nullptr}, value_fc1{nullptr}, value_fc2{nullptr};
@@ -167,7 +172,7 @@ void Neuro::save(float loss) {
     static int iter = 0;
     lossTracker->addLoss(loss);
 
-    if (++iter % 100 == 0) {
+    if (++iter % 200 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
             torch::save(*optimizer, "gomoku_optimizer.pt");
@@ -251,30 +256,68 @@ TMove Neuro::predictBestMove() {
     torch::NoGradGuard no_grad;
     model->eval();
 
+    // Получаем предсказания нейросети
     auto [policy_logits, value] = model->forward(getTensorFromField());
 
-    float T = 1.5f;
-    auto p = torch::softmax(policy_logits[0] / T, 0).clone();
+    // используем чистые логиты через softmax, без температуры
+    auto p = torch::softmax(policy_logits[0], 0).clone();
 
+    // Маскируем недопустимые ходы (зануляем их вероятность)
     auto node = current()->node;
     for (int i = 0; i < 225; ++i) {
-        if (kl[i] != 1 || !isExpected(node, i)) { // только пустые и ожидаемые
+        if (kl[i] != 1 || getChild(node,i) == NULL){// || !isExpected(node, i)) {
             p[i] = 0.0f;
         }
     }
 
+    // Проверка на случай, если все ходы были отфильтрованы
     float sum = p.sum().item<float>();
-    if (sum > 1e-6f) {
-        p = p / sum;
-    } else {
+    if (sum < 1e-6f) {
+        // Если легальных ходов не нашлось в маске, берем любую свободную клетку
+        std::cout << "легальных ходов не нашлось в маске, берем любую свободную клетку" << std::endl;
         for (int i = 0; i < 225; ++i)
             if (kl[i] == 0) p[i] = 1.0f;
-        p = p / p.sum();
     }
 
-    auto idx = torch::multinomial(p, 1).item<int>();
+    // Находим индекс самого сильного хода (вместо случайного выбора multinomial)
+    auto idx = torch::argmax(p).item<int>();
+
+    if (kl[idx] != 1)
+        std::cout << "Не удалось попасть в свободную клетку" << std::endl;
+
     return (TMove)idx;
 }
+
+
+//случайный выбор multinomial)
+//TMove Neuro::predictBestMove() {
+//    torch::NoGradGuard no_grad;
+//    model->eval();
+//
+//    auto [policy_logits, value] = model->forward(getTensorFromField());
+//
+//    float T = 1.5f;
+//    auto p = torch::softmax(policy_logits[0] / T, 0).clone();
+//
+//    auto node = current()->node;
+//    for (int i = 0; i < 225; ++i) {
+//        if (kl[i] != 1 || !isExpected(node, i)) { // только пустые и ожидаемые
+//            p[i] = 0.0f;
+//        }
+//    }
+//
+//    float sum = p.sum().item<float>();
+//    if (sum > 1e-6f) {
+//        p = p / sum;
+//    } else {
+//        for (int i = 0; i < 225; ++i)
+//            if (kl[i] == 0) p[i] = 1.0f;
+//        p = p / p.sum();
+//    }
+//
+//    auto idx = torch::multinomial(p, 1).item<int>();
+//    return (TMove)idx;
+//}
 
 //// ==========================================================
 //// Получение рейтинга
@@ -355,28 +398,32 @@ void Neuro::trainSample(const TrainSample& s) {
     const float beta = 0.3f; // policy слабее, чем value
     auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
 
+    float lambda = 1e-4f; // сила L2
+    for (auto& param : model->parameters()) {
+        loss = loss + lambda * param.pow(2).sum();
+    }
     // 6️⃣ Backprop
     loss.backward();
     optimizer->step();
 
     // 7️⃣ Debug
-    static int iter = 0;
-    if (iter < 20) {
-        std::cout << "[DEBUG] move=" << (int)s.move
-                  << " | result=" << s.result
-                  << " | nodeRating=" << nodeRating
-                  << " | combined=" << combinedValue
-                  << " | policy_loss=" << policy_loss.item<float>()
-                  << std::endl;
-    }
-
-    if (++iter % 500 == 0) {
-        std::cout << "[AI] trainSample | loss=" << loss.item<float>()
-                  << " | value=" << value.item<float>()
-                  << " | policy_loss=" << policy_loss.item<float>()
-                  << " | combinedValue=" << combinedValue
-                  << std::endl;
-    }
+//    static int iter = 0;
+//    if (iter < 20) {
+//        std::cout << "[DEBUG] move=" << (int)s.move
+//                  << " | result=" << s.result
+//                  << " | nodeRating=" << nodeRating
+//                  << " | combined=" << combinedValue
+//                  << " | policy_loss=" << policy_loss.item<float>()
+//                  << std::endl;
+//    }
+//
+//    if (++iter % 500 == 0) {
+//        std::cout << "[AI] trainSample | loss=" << loss.item<float>()
+//                  << " | value=" << value.item<float>()
+//                  << " | policy_loss=" << policy_loss.item<float>()
+//                  << " | combinedValue=" << combinedValue
+//                  << std::endl;
+//    }
 
     save(loss.item<float>());
 }
