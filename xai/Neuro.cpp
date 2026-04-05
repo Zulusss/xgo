@@ -259,7 +259,7 @@ TMove Neuro::predictBestMove() {
     model->eval();
 
     static int iter = 0;
-    bool useExploration = (++iter % 3 == 0);
+    bool useExploration = (++iter % 7 == 0);
 
     // 1️⃣ Forward
     auto [policy_logits, value] = model->forward(getTensorFromField());

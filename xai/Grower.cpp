@@ -137,7 +137,7 @@ void Grower::grow() {
                     }
                 }
                 int totalPlayed = drawsCount+neuroWinsCount+regularWinsCount+nnXCount+nnOCount+nnDCount;
-                if (neuroWithNeuro && !neuroPlaysO && totalPlayed%4>1) {
+                if (neuroWithNeuro && totalPlayed%4>1) {
                     neuroWithNeuro = false;
                 }
 
