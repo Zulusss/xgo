@@ -145,53 +145,49 @@ void Grower::grow() {
 
                 bool log = totalPlayed % 9 == 0;
 
-                if (!isWin) {
+                // Определяем, была ли нейросеть тем, кто сделал последний ход
+                bool neuroMovedLast = (neuroPlaysO == (this->count % 2 == 0));
+
+                // Нейросеть победила, если:
+                // 1. Она ходила последней и рейтинг положительный (она создала победную ситуацию)
+                // 2. Она НЕ ходила последней и рейтинг отрицательный (соперник подставился)
+                bool neuroWon = (neuroMovedLast == (lastRating > 0));
+
+                if (neuroWithNeuro) {
+                    if (!isWin) {
+                        if (log) std::cout << "[RESTART] Reason: N-N DRAW (";
+                        nnDCount++;
+                    }
+                    else if (xWon) {
+                        trackerNNX->addLoss(this->count);
+                        if (log) std::cout << "[RESTART] Reason: NX WON (";
+                        nnXCount++;
+                    } else {
+                        trackerNNO->addLoss(this->count);
+                        if (log) std::cout << "[RESTART] Reason: NO WON (";
+                        nnOCount++;
+                    }
+                }
+                else if (!isWin) {
                     if (log) std::cout << "[RESTART] Reason: DRAW (";
                     drawsCount++;
-                } else {
+                } else if (neuroWon) {
+                    neuroWinsCount++;
+                    if (log) std::cout << "[RESTART] Reason: Neuro WON (";
 
-                    // Определяем, была ли нейросеть тем, кто сделал последний ход
-                    bool neuroMovedLast = (neuroPlaysO == (this->count % 2 == 0));
-
-                    // Нейросеть победила, если:
-                    // 1. Она ходила последней и рейтинг положительный (она создала победную ситуацию)
-                    // 2. Она НЕ ходила последней и рейтинг отрицательный (соперник подставился)
-                    bool neuroWon = (neuroMovedLast == (lastRating > 0));
-
-                    if (neuroWithNeuro) {
-
-                        if (!isWin) {
-                        if (log) std::cout << "[RESTART] Reason: N-N DRAW (";
-                            nnDCount++;
-                        }
-                        else if (xWon) {
-                            trackerNNX->addLoss(this->count);
-                            if (log) std::cout << "[RESTART] Reason: NX WON (";
-                            nnXCount++;
-                        } else {
-                            trackerNNO->addLoss(this->count);
-                            if (log) std::cout << "[RESTART] Reason: NO WON (";
-                            nnOCount++;
-                        }
-                    }
-                    else if (neuroWon) {
-                        neuroWinsCount++;
-                        if (log) std::cout << "[RESTART] Reason: Neuro WON (";
-
-                        if (neuroPlaysO) {
-                            trackerNO->addLoss(this->count);
-                        } else {
-                            trackerNX->addLoss(this->count);
-                        }
+                    if (neuroPlaysO) {
+                        trackerNO->addLoss(this->count);
                     } else {
-                        regularWinsCount++;
-                        if (log) std::cout << "[RESTART] Reason: Legacy WON (";
+                        trackerNX->addLoss(this->count);
+                    }
+                } else {
+                    regularWinsCount++;
+                    if (log) std::cout << "[RESTART] Reason: Legacy WON (";
 
-                        if (neuroPlaysO) {
-                            trackerLX->addLoss(this->count);
-                        } else {
-                            trackerLO->addLoss(this->count);
-                        }
+                    if (neuroPlaysO) {
+                        trackerLX->addLoss(this->count);
+                    } else {
+                        trackerLO->addLoss(this->count);
                     }
                 }
 

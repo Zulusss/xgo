@@ -251,56 +251,112 @@ int Neuro::moveNeuro() {
     return rat;
 };
 
-// -----------------------------
-// predictBestMove с фильтром пустых клеток
+/// -----------------------------
+// predictBestMove (оптимизировано)
 // -----------------------------
 TMove Neuro::predictBestMove() {
     torch::NoGradGuard no_grad;
     model->eval();
 
-    // Получаем предсказания нейросети
+    static int iter = 0;
+    bool useExploration = (++iter % 3 == 0);
+
+    // 1️⃣ Forward
     auto [policy_logits, value] = model->forward(getTensorFromField());
 
-    // используем чистые логиты через softmax, без температуры
+    // =========================================================
+    // 🔥 EXPLORATION (multinomial) — только kl[i] == 1
+    // =========================================================
+    if (useExploration) {
+
+     float T = 1.2f;
+
+     auto p = torch::softmax(policy_logits[0] / T, 0).clone();
+
+     int free = -1;
+
+     for (int i = 0; i < 225; ++i) {
+         if (kl[i] != 1) {
+             p[i] = 0.0f;
+         } else {
+             free = i;
+         }
+     }
+
+     float sum = p.sum().item<float>();
+     if (sum > 1e-6f) {
+         p = p / sum;
+
+         auto idx = torch::multinomial(p, 1).item<int>();
+
+         if (kl[idx] == 1)
+             return (TMove)idx;
+     }
+
+     // fallback
+     if (free >= 0)
+         return (TMove)free;
+    }
+
+    // =========================================================
+    // 🔥 EXPLOIT (argmax) — kl[i] == 1 + getChild != NULL
+    // =========================================================
+
     auto p = torch::softmax(policy_logits[0], 0).clone();
 
-    // Маскируем недопустимые ходы (зануляем их вероятность)
     auto node = current()->node;
+
     int free = -1;
+
     for (int i = 0; i < 225; ++i) {
-        if (kl[i] != 1 || getChild(node,i) == NULL){// || !isExpected(node, i)) {
-            p[i] = 0.0f;
-        } else {
-            free = i;
-        }
+     if (kl[i] != 1 || getChild(node, i) == NULL) {
+         p[i] = 0.0f;
+     } else {
+         free = i;
+     }
     }
 
-    // Проверка на случай, если все ходы были отфильтрованы
     float sum = p.sum().item<float>();
+
     if (sum < 1e-6f) {
-        if (free >= 0) {
-            std::cout << "легальных ходов не нашлось в маске, но нашли free, totalDirectChilds="
-                << (int)node->totalDirectChilds
-                << std::endl;
-            return (TMove)free;
-        }
-        // Если легальных ходов не нашлось в маске, берем любую свободную клетку
-        std::cout << "легальных ходов не нашлось в маске, берем любую свободную клетку, totalDirectChilds="
-            << (int)node->totalDirectChilds
-            << std::endl;
-        for (int i = 0; i < 225; ++i)
-            if (kl[i] == 0) p[i] = 1.0f;
+     if (free >= 0) {
+         std::cout << "fallback (argmax): берем последнюю допустимую клетку" << std::endl;
+         return (TMove)free;
+     }
+
+     std::cout << "fallback (argmax): нет допустимых ходов!" << std::endl;
+     return (TMove)0;
     }
 
-    // Находим индекс самого сильного хода (вместо случайного выбора multinomial)
+    p = p / sum;
+
     auto idx = torch::argmax(p).item<int>();
 
-    if (kl[idx] != 1)
-        std::cout << "Не удалось попасть в свободную клетку" << std::endl;
+    if (kl[idx] != 1 || getChild(node, idx) == NULL) {
+     std::cout << "argmax попал в запрещённую клетку, ищем вручную" << std::endl;
+
+     float best = -1.0f;
+     int bestIdx = -1;
+
+     for (int i = 0; i < 225; ++i) {
+         if (kl[i] == 1 && getChild(node, i) != NULL) {
+             float val = p[i].item<float>();
+             if (val > best) {
+                 best = val;
+                 bestIdx = i;
+             }
+         }
+     }
+
+     if (bestIdx >= 0)
+         return (TMove)bestIdx;
+
+     if (free >= 0)
+         return (TMove)free;
+    }
 
     return (TMove)idx;
 }
-
 
 //случайный выбор multinomial)
 //TMove Neuro::predictBestMove() {
@@ -382,7 +438,7 @@ void Neuro::trainSample(const TrainSample& s) {
     float nodeRating = decodeRating(s.node->rating);
     float gameResult = s.result * 2.0f - 1.0f; // 1 → +1, 0 → -1
 
-    const float alpha = 0.6f;
+    const float alpha = 0.35f;
     float combinedValue = alpha * nodeRating + (1.0f - alpha) * gameResult;
 
     combinedValue = std::max(-1.0f, std::min(1.0f, combinedValue));
@@ -391,19 +447,22 @@ void Neuro::trainSample(const TrainSample& s) {
     // 3️⃣ Policy loss
     torch::Tensor policy_loss = torch::tensor(0.0f, torch::kFloat32).to(policy_logits.device());
 
-    if (s.result > 0 && s.move >= 0) {
-        // 🔥 учим ТОЛЬКО хорошие ходы
+    if (s.move >= 0) {
         auto target_move = torch::tensor({s.move}, torch::kLong).to(policy_logits.device());
 
         policy_loss = torch::nn::functional::cross_entropy(policy_logits, target_move);
 
-        // 🔥 добавим небольшую энтропию (чтобы не схлопывалось)
+        // 🔥 Ослабляем плохие ходы, но НЕ игнорируем
+        if (s.result <= 0.0f) {
+            policy_loss = policy_loss * 0.3f;
+        }
+
+        // 🔥 Энтропия (оставляем)
         auto log_probs = torch::log_softmax(policy_logits, 1);
         auto entropy = -torch::sum(torch::softmax(policy_logits,1) * log_probs);
 
         policy_loss = policy_loss - 0.01f * entropy;
     }
-
     // 4️⃣ Value loss (ВСЕГДА обучается)
     auto value_loss = torch::mse_loss(value, target_value);
 
@@ -414,6 +473,10 @@ void Neuro::trainSample(const TrainSample& s) {
     float lambda = 1e-4f; // сила L2
     for (auto& param : model->parameters()) {
         loss = loss + lambda * param.pow(2).sum();
+    }
+    // 🔥 Балансировка: усиливаем обучение за O
+    if (!s.isXTurn) {
+        loss = loss * 1.3f;
     }
     // 6️⃣ Backprop
     loss.backward();
