@@ -174,7 +174,7 @@ void Neuro::save(float loss) {
     static int iter = 0;
     lossTracker->addLoss(loss);
 
-    if (++iter % 200 == 0) {
+    if (++iter % 1000 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
             torch::save(*optimizer, "gomoku_optimizer.pt");
@@ -213,6 +213,8 @@ void Neuro::addSample(TMove move) {
     sample.result = 0;
     sample.isXTurn = (count % 2 == 0);
     sample.node = current()->node;
+    sample.parentRating = (count < 2
+        ? current() : previous()) ->node->rating;
 
     // --- вернуть ход на место ---
     kl[move] = saved;
@@ -427,6 +429,13 @@ void Neuro::trainFromGame(bool lastPlayerWon) {
     gameHistory.clear();
 }
 
+//⚖️ Можно ли мешать обучение?
+//
+//👉 Да, но с балансом.
+//
+//Рекомендуемое соотношение:
+//trainSample()                → 60–80%
+//trainNetworkOnCurrentPosition() → 20–40%
 void Neuro::trainSample(const TrainSample& s) {
     model->train();
     optimizer->zero_grad();
@@ -439,7 +448,9 @@ void Neuro::trainSample(const TrainSample& s) {
     float gameResult = s.result * 2.0f - 1.0f; // 1 → +1, 0 → -1
 
     const float alpha = 0.35f;
-    float combinedValue = alpha * nodeRating + (1.0f - alpha) * gameResult;
+    float combinedValue = s.node->totalChilds > 3000 || std::abs(s.node->rating) > 8000
+        ? nodeRating
+        : alpha * nodeRating + (1.0f - alpha) * gameResult;
 
     combinedValue = std::max(-1.0f, std::min(1.0f, combinedValue));
     auto target_value = torch::tensor({combinedValue}, torch::kFloat32).to(value.device());
@@ -452,10 +463,18 @@ void Neuro::trainSample(const TrainSample& s) {
 
         policy_loss = torch::nn::functional::cross_entropy(policy_logits, target_move);
 
-        // 🔥 Ослабляем плохие ходы, но НЕ игнорируем
-        if (s.result <= 0.0f) {
-            policy_loss = policy_loss * 0.3f;
+        // 🔥 Advantage: насколько ход хуже позиции
+        float disAdvantage = std::abs(s.parentRating + s.node->rating);
+
+        // бонус или штраф
+        float weight = 1.5f;// [0.2 .. 1.5+]
+
+        if (disAdvantage > 0) {
+            weight -= disAdvantage/2000.0;
+            if (weight < 0.2) weight = 0.2;
         }
+
+        policy_loss = policy_loss * weight;
 
         // 🔥 Энтропия (оставляем)
         auto log_probs = torch::log_softmax(policy_logits, 1);
@@ -476,30 +495,138 @@ void Neuro::trainSample(const TrainSample& s) {
     }
     // 🔥 Балансировка: усиливаем обучение за O
     if (!s.isXTurn) {
-        loss = loss * 1.3f;
+        loss = loss * 1.25f;
     }
     // 6️⃣ Backprop
     loss.backward();
     optimizer->step();
 
     // 7️⃣ Debug
-//    static int iter = 0;
-//    if (iter < 20) {
-//        std::cout << "[DEBUG] move=" << (int)s.move
-//                  << " | result=" << s.result
-//                  << " | nodeRating=" << nodeRating
-//                  << " | combined=" << combinedValue
-//                  << " | policy_loss=" << policy_loss.item<float>()
-//                  << std::endl;
-//    }
+  static int dbg = 0;
+  if (++dbg % 200 == 0)
+  {
+      std::cout << "[TRAIN " << dbg
+                << "] rating=" << nodeRating
+                << " | combined=" << combinedValue
+                << " | childs=" << s.node->totalChilds
+                << " | loss=" << loss.item<float>()
+                << " | value=" << value.item<float>()
+                << " | policy_loss=" << policy_loss.item<float>()
+                << std::endl;
+  }
+    save(loss.item<float>());
+}
+
+//⚖️ Можно ли мешать обучение?
 //
-//    if (++iter % 500 == 0) {
-//        std::cout << "[AI] trainSample | loss=" << loss.item<float>()
-//                  << " | value=" << value.item<float>()
-//                  << " | policy_loss=" << policy_loss.item<float>()
-//                  << " | combinedValue=" << combinedValue
-//                  << std::endl;
-//    }
+//👉 Да, но с балансом.
+//
+//Рекомендуемое соотношение:
+//trainSample()                → 60–80%
+//trainNetworkOnCurrentPosition() → 20–40%
+void Neuro::trainNetworkOnCurrentPosition() {
+
+    auto node = current()->node;
+
+    model->train();
+    optimizer->zero_grad();
+
+    // 1️⃣ Forward
+    auto state = getTensorFromField();
+    auto [policy_logits, value] = model->forward(state);
+
+    // =========================================
+    // 2️⃣ VALUE = текущий рейтинг узла
+    // =========================================
+    float nodeRating = decodeRating(node->rating);
+
+    auto target_value = torch::tensor({nodeRating}, torch::kFloat32)
+                            .to(value.device());
+
+    auto value_loss = torch::mse_loss(value, target_value);
+
+    // =========================================
+    // 3️⃣ POLICY = распределение по детям
+    // =========================================
+    auto target_probs = torch::zeros({225}, torch::kFloat32)
+                            .to(policy_logits.device());
+
+    float sumExp = 0.0f;
+    const float T = 0.7f; // тут можно ниже → увереннее
+
+    int validMoves = 0;
+
+    for (int i = 0; i < 225; ++i) {
+
+        if (kl[i] != 1) continue;
+
+        auto child = getChild(node, i);
+        if (!child) continue;
+
+        // фильтр слабых детей
+        if (child->totalChilds < 50) continue;
+
+        float r = decodeRating(child->rating);
+
+        // важно: для текущего игрока
+        float val = -r;
+
+        float e = std::exp(val / T);
+
+        target_probs[i] = e;
+        sumExp += e;
+        validMoves++;
+    }
+
+    // fallback
+    if (sumExp > 1e-6f) {
+        target_probs = target_probs / sumExp;
+    } else {
+        return; // нечему учиться
+    }
+
+    // =========================================
+    // 4️⃣ POLICY LOSS
+    // =========================================
+    auto log_probs = torch::log_softmax(policy_logits, 1);
+
+    auto policy_loss = -torch::sum(target_probs * log_probs[0]);
+
+    // лёгкая энтропия
+    auto probs = torch::softmax(policy_logits, 1);
+    auto entropy = -torch::sum(probs * log_probs);
+
+    policy_loss = policy_loss - 0.01f * entropy;
+
+    // =========================================
+    // 5️⃣ ОБЩИЙ LOSS
+    // =========================================
+    const float beta = 0.5f; // тут policy важнее!
+
+    auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
+
+    // L2
+    float lambda = 1e-4f;
+    for (auto& param : model->parameters()) {
+        loss = loss + lambda * param.pow(2).sum();
+    }
+
+    // =========================================
+    // 6️⃣ BACKPROP
+    // =========================================
+    loss.backward();
+    optimizer->step();
+
+    // debug
+    static int dbg = 0;
+    if (++dbg % 50 == 0) {
+        std::cout << "[TREE TRAIN " << dbg
+                  << "] childs=" << node->totalChilds
+                  << " | value=" << value.item<float>()
+                  << " | target=" << nodeRating
+                  << " | loss=" << loss.item<float>()
+                  << std::endl;
+    }
 
     save(loss.item<float>());
 }

@@ -13,7 +13,7 @@ public:
     void buildTree();
     void goBack(int c0);
 
-//    virtual void trainNetworkOnCurrentPosition(){};
+    virtual void trainNetworkOnCurrentPosition(){};
 //    virtual void trainNetworkOnSingleMove(TMove move, TRating rating){};
 
 private:

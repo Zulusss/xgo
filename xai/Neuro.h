@@ -87,13 +87,13 @@ struct TrainSample {
     float result;// победа/поражение (0/1)
     bool isXTurn;
     TNode* node;
+    TRating parentRating;
 };
 
 class Neuro : public GameBoard {
 public:
     Neuro(SimplyNumbers *simplyGen, Hashtable *movesHash, int gameMode);
-//    void trainNetworkOnCurrentPosition();
-//    void trainNetworkOnSingleMove(TMove move, TRating rating);
+    void trainNetworkOnCurrentPosition();
     int moveNeuro();
 
 protected:

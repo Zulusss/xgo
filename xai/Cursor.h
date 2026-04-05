@@ -53,6 +53,7 @@ protected:
 
   //inline
   CursorHistory *current();
+  CursorHistory *previous();
   TNode *getFirstNode();
   TNode *lastMove();
   CursorHistory *getMove(int i);

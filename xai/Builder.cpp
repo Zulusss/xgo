@@ -75,23 +75,24 @@ void Builder::goBack(int count0) {
   TMove critical;
   TRating cr;
   while(count>count0) {
-//    IF_TRAIN_READY { // Train neural network if we are prepared enough
-//        TNode *n = current()->node;
-//        critical = std::abs(n->rating) > 8000 ? current()->move : 0;
-//        back();
-//        n = current()->node;
-//
-//        // Обучаем, если позиция достаточно изучена
-//        if (count > 0 && (n->totalChilds >= 10000
-//             || n->totalDirectChilds == 1
-//             || n->totalDirectChilds <= 4 && n->totalChilds >= 1000
-//            )) {
-//            //std::cout << "[AI] added = " << added << std::endl;
-//            trainNetworkOnCurrentPosition();
-//        } else if (critical)
-//            trainNetworkOnSingleMove(critical, n->rating);
-//    }
-//    else
+    IF_TRAIN_READY { // Train neural network if we are prepared enough
+        TNode *n = current()->node;
+        critical = std::abs(n->rating) > 8000 ? current()->move : 0;
+        back();
+        n = current()->node;
+
+        // Обучаем, если позиция достаточно изучена
+        if (count > 0 && (n->totalChilds >= 10000
+             || n->totalDirectChilds == 1
+             || n->totalDirectChilds <= 4 && n->totalChilds >= 1000
+            )) {
+            //std::cout << "[AI] added = " << added << std::endl;
+
+            static int skip = 0;
+            if (++skip % 700 == 0) trainNetworkOnCurrentPosition();
+        }
+    }
+    else
     {
         back();
     }

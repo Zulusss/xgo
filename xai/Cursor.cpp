@@ -39,6 +39,10 @@ CursorHistory *Cursor::current() {
         return &(history[count-1]);
 }
 
+CursorHistory *Cursor::previous() {
+        return count < 2 ? NULL : &(history[count-2]);
+}
+
 CursorHistory *Cursor::getMove(int i) {
         return &(history[i]);
 }
