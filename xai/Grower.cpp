@@ -122,20 +122,28 @@ void Grower::grow() {
         //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
         IF_TRAIN_READY {
             float lastRating = lastMove()->rating;
-            bool isWin = std::abs(lastRating) > 6500 && this->count >= 5 || std::abs(lastRating) > 9000;
-            static bool neuroWithNeuro = false;
-            if (!neuroWithNeuro && drawsCount+neuroWinsCount > 10) {
-                neuroWithNeuro = true;
-                std::cout << "    Neuro vs Neuro mode activated!" << std::endl;
-            }
+            bool isWin = std::abs(lastRating) > 9000;
+            static bool neuroWithNeuro = false, nwnActivated = false;
 
             // Условие перезапуска: победный рейтинг или лимит ходов
-            if (this->count > 21 || (isWin && this->count > 1)) {
+            if (!restartRequested && (this->count > 21 || (isWin && this->count > 1))) {
                 restartRequested = true;
+
+                if (!neuroWithNeuro && drawsCount+neuroWinsCount > 15) {
+                    neuroWithNeuro = true;
+                    if (!nwnActivated) {
+                        nwnActivated = true;
+                        std::cout << "    Neuro vs Neuro mode activated!" << std::endl;
+                    }
+                }
+                int totalPlayed = drawsCount+neuroWinsCount+regularWinsCount+nnXCount+nnOCount+nnDCount;
+                if (neuroWithNeuro && !neuroPlaysO && totalPlayed%4>1) {
+                    neuroWithNeuro = false;
+                }
 
                 bool xWon = this->count % 2 == lastRating > 0;
 
-                bool log = (drawsCount+neuroWinsCount+regularWinsCount+nnCount) % 9 == 0;
+                bool log = totalPlayed % 9 == 0;
 
                 if (!isWin) {
                     if (log) std::cout << "[RESTART] Reason: DRAW (";
@@ -151,13 +159,19 @@ void Grower::grow() {
                     bool neuroWon = (neuroMovedLast == (lastRating > 0));
 
                     if (neuroWithNeuro) {
-                        nnCount++;
-                        if (xWon) {
-                            trackerNO->addLoss(this->count);
+
+                        if (!isWin) {
+                        if (log) std::cout << "[RESTART] Reason: N-N DRAW (";
+                            nnDCount++;
+                        }
+                        else if (xWon) {
+                            trackerNNX->addLoss(this->count);
                             if (log) std::cout << "[RESTART] Reason: NX WON (";
+                            nnXCount++;
                         } else {
-                            trackerNX->addLoss(this->count);
+                            trackerNNO->addLoss(this->count);
                             if (log) std::cout << "[RESTART] Reason: NO WON (";
+                            nnOCount++;
                         }
                     }
                     else if (neuroWon) {
@@ -181,18 +195,26 @@ void Grower::grow() {
                     }
                 }
 
-                if (log) std::cout << (xWon ? " X " : " O ")
+                if (log) {
+                    std::cout << (xWon ? " X " : " O ")
                           << " Count: " << this->count
                           << " Rating: "
                           << lastRating << ")"
                           << " CURRENT SCORE -> Neuro: " << neuroWinsCount
                           << " | Legacy: " << regularWinsCount
-                          << " | Draws: " << drawsCount
-                          << " Avg.Age, NX/NO/LX/LO: "
-                          << trackerNX->toString() << " / "
-                          << trackerNO->toString() << " / "
-                          << trackerLX->toString() << " / "
-                          << trackerLO->toString() << std::endl;
+                          << " | Draws: " << drawsCount;
+                    if (neuroWithNeuro) {
+                        std::cout << " Avg.Age, NNX/NNO: "
+                              << trackerNNX->toString() << " / "
+                              << trackerNNO->toString() << std::endl;
+                    } else {
+                        std::cout << " Avg.Age, NX/NO/LX/LO: "
+                              << trackerNX->toString() << " / "
+                              << trackerNO->toString() << " / "
+                              << trackerLX->toString() << " / "
+                              << trackerLO->toString() << std::endl;
+                    }
+                 }
 
                 trainFromGame( lastRating > 0);
 

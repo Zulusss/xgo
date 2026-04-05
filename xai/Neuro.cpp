@@ -88,6 +88,8 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
     trackerNO = new LossTracker(30);
     trackerLX = new LossTracker(30);
     trackerLO = new LossTracker(30);
+    trackerNNX = new LossTracker(30);
+    trackerNNO = new LossTracker(30);
 
     trainedFieldCount = 0;
     trainedSingleCount = 0;
@@ -264,17 +266,28 @@ TMove Neuro::predictBestMove() {
 
     // Маскируем недопустимые ходы (зануляем их вероятность)
     auto node = current()->node;
+    int free = -1;
     for (int i = 0; i < 225; ++i) {
         if (kl[i] != 1 || getChild(node,i) == NULL){// || !isExpected(node, i)) {
             p[i] = 0.0f;
+        } else {
+            free = i;
         }
     }
 
     // Проверка на случай, если все ходы были отфильтрованы
     float sum = p.sum().item<float>();
     if (sum < 1e-6f) {
+        if (free >= 0) {
+            std::cout << "легальных ходов не нашлось в маске, но нашли free, totalDirectChilds="
+                << (int)node->totalDirectChilds
+                << std::endl;
+            return (TMove)free;
+        }
         // Если легальных ходов не нашлось в маске, берем любую свободную клетку
-        std::cout << "легальных ходов не нашлось в маске, берем любую свободную клетку" << std::endl;
+        std::cout << "легальных ходов не нашлось в маске, берем любую свободную клетку, totalDirectChilds="
+            << (int)node->totalDirectChilds
+            << std::endl;
         for (int i = 0; i < 225; ++i)
             if (kl[i] == 0) p[i] = 1.0f;
     }

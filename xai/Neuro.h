@@ -102,7 +102,7 @@ protected:
     int trainedSingleCount;
     int skipTrainFieldCount;
 
-    LossTracker *trackerNX, *trackerNO, *trackerLX, *trackerLO;
+    LossTracker *trackerNX, *trackerNO, *trackerLX, *trackerLO, *trackerNNX, *trackerNNO;
 
     void trainFromGame(bool lastPlayerWon);
     void trainSample(const TrainSample& s);
