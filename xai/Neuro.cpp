@@ -564,7 +564,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         if (!child) continue;
 
         // фильтр слабых детей
-        if (child->totalChilds < 50) continue;
+        if (child->totalChilds < 50 && std::abs(child->rating)<6200) continue;
 
         float r = decodeRating(child->rating);
 
@@ -622,6 +622,8 @@ void Neuro::trainNetworkOnCurrentPosition() {
     if (++dbg % 50 == 0) {
         std::cout << "[TREE TRAIN " << dbg
                   << "] childs=" << node->totalChilds
+                  << " | direct=" << node->totalDirectChilds
+                  << " | valid=" << validMoves
                   << " | value=" << value.item<float>()
                   << " | target=" << nodeRating
                   << " | loss=" << loss.item<float>()

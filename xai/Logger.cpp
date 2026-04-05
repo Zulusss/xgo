@@ -148,6 +148,8 @@ void Logger::cull(TRating ratingOld, TRating max_rating, TNode *node) {
         } else  {
            ++parents1Culled2;
         }
+        node->setFixedRating(true);
+        persister->save(node);
     } else if (ratingOld > -CULL_RATING1 && max_rating >= CULL_RATING1) {
 
         if (node->totalChilds >= BIG_PARENT5) {
@@ -161,8 +163,7 @@ void Logger::cull(TRating ratingOld, TRating max_rating, TNode *node) {
         } else  {
            ++parents1Culled1;
         }
-    } else return;
+        node->setFixedRating(true);
+    }
 
-    node->setFixedRating(true);
-    persister->save(node);
 }

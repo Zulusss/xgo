@@ -89,7 +89,7 @@ void Builder::goBack(int count0) {
             //std::cout << "[AI] added = " << added << std::endl;
 
             static int skip = 0;
-            if (++skip % 700 == 0) trainNetworkOnCurrentPosition();
+            if (++skip % 555 == 0) trainNetworkOnCurrentPosition();
         }
     }
     else

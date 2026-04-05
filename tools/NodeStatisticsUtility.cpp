@@ -105,6 +105,7 @@ public:
         }
 
         inFile.close();
+        std::cout << std::endl;
     }
 
     void processFile() {

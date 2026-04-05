@@ -126,7 +126,7 @@ void Grower::grow() {
             static bool neuroWithNeuro = false, nwnActivated = false;
 
             // Условие перезапуска: победный рейтинг или лимит ходов
-            if (!restartRequested && (this->count > 21 || (isWin && this->count > 1))) {
+            if (!restartRequested && (this->count > 35 || (isWin && this->count > 1))) {
                 restartRequested = true;
 
                 if (!neuroWithNeuro && drawsCount+neuroWinsCount > 15) {
