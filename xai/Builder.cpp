@@ -75,7 +75,7 @@ void Builder::goBack(int count0) {
   TMove critical;
   TRating cr;
   while(count>count0) {
-    IF_TRAIN_READY { // Train neural network if we are prepared enough
+    IF_READY_FOR_TRAIN { // Train neural network if we are prepared enough
         TNode *n = current()->node;
         critical = std::abs(n->rating) > 8000 ? current()->move : 0;
         back();
@@ -89,7 +89,7 @@ void Builder::goBack(int count0) {
             //std::cout << "[AI] added = " << added << std::endl;
 
             static int skip = 0;
-            if (++skip % 555 == 0) trainNetworkOnCurrentPosition();
+            if (++skip % (20+count*16) == 0) trainNetworkOnCurrentPosition();
         }
     }
     else

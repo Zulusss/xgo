@@ -261,7 +261,7 @@ TMove Neuro::predictBestMove() {
     model->eval();
 
     static int iter = 0;
-    bool useExploration = (++iter % 7 == 0);
+    bool useExploration = (++iter % 7 == 0) && count < 21;
 
     // 1️⃣ Forward
     auto [policy_logits, value] = model->forward(getTensorFromField());
@@ -619,10 +619,10 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // debug
     static int dbg = 0;
-    if (++dbg % 50 == 0) {
+    if (++dbg % 200 == 0) {
         std::cout << "[TREE TRAIN " << dbg
                   << "] childs=" << node->totalChilds
-                  << " | direct=" << node->totalDirectChilds
+                  << " | direct=" << (int)node->totalDirectChilds
                   << " | valid=" << validMoves
                   << " | value=" << value.item<float>()
                   << " | target=" << nodeRating

@@ -120,7 +120,7 @@ void Grower::grow() {
         }
 
         //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
-        IF_TRAIN_READY {
+        IF_READY_FOR_TRAIN {
             float lastRating = lastMove()->rating;
             bool isWin = std::abs(lastRating) > 16000;
             static bool neuroWithNeuro = false, nwnActivated = false;
