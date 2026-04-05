@@ -261,7 +261,7 @@ TMove Neuro::predictBestMove() {
     model->eval();
 
     static int iter = 0;
-    bool useExploration = (++iter % 7 == 0) && count < 21;
+    bool useExploration = (++iter % 19 == 0) && count < 15;
 
     // 1️⃣ Forward
     auto [policy_logits, value] = model->forward(getTensorFromField());
@@ -548,13 +548,13 @@ void Neuro::trainNetworkOnCurrentPosition() {
     // =========================================
     // 3️⃣ POLICY = распределение по детям
     // =========================================
-    auto target_probs = torch::zeros({225}, torch::kFloat32)
-                            .to(policy_logits.device());
+    struct MoveScore {
+        int idx;
+        float val;
+    };
 
-    float sumExp = 0.0f;
-    const float T = 0.7f; // тут можно ниже → увереннее
-
-    int validMoves = 0;
+    std::vector<MoveScore> moves;
+    moves.reserve(32);
 
     for (int i = 0; i < 225; ++i) {
 
@@ -564,19 +564,55 @@ void Neuro::trainNetworkOnCurrentPosition() {
         if (!child) continue;
 
         // фильтр слабых детей
-        if (child->totalChilds < 50 && std::abs(child->rating)<6200) continue;
+        if (child->totalChilds < 50 && std::abs(child->rating) < 6200)
+            continue;
 
         float r = decodeRating(child->rating);
 
-        // важно: для текущего игрока
+        // чем больше — тем лучше ход
         float val = -r;
 
-        float e = std::exp(val / T);
-
-        target_probs[i] = e;
-        sumExp += e;
-        validMoves++;
+        moves.push_back({i, val});
     }
+
+    // если мало ходов — нет смысла учить
+    if (moves.size() < 2)
+        return;
+
+    // =========================================
+    // 🔥 СОРТИРОВКА (лучшие сверху)
+    // =========================================
+    std::sort(moves.begin(), moves.end(),
+        [](const MoveScore& a, const MoveScore& b) {
+            return a.val > b.val;
+        });
+
+    // =========================================
+    // 🔥 TOP-K
+    // =========================================
+    const int K = std::min(6, (int)moves.size()); // 4–8 нормально
+
+    auto target_probs = torch::zeros({225}, torch::kFloat32)
+                            .to(policy_logits.device());
+
+    float sumExp = 0.0f;
+    const float T = 0.5f; // ниже → более жёсткий выбор
+
+    for (int i = 0; i < K; ++i) {
+        float e = std::exp(moves[i].val / T);
+
+        target_probs[moves[i].idx] = e;
+        sumExp += e;
+    }
+
+    // нормализация
+    if (sumExp > 1e-6f) {
+        target_probs = target_probs / sumExp;
+    } else {
+        return;
+    }
+
+    int validMoves = K;
 
     // fallback
     if (sumExp > 1e-6f) {

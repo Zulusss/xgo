@@ -35,7 +35,9 @@ void Builder::buildTree() {
     i = chooseNodeToExpand();
 
     if (i == -1) {
-        std::cout << "builder fallback." << std::endl;
+        std::cout << "builder fallback. count=" << count0
+                << " count=" << count
+                << " move=" << (int)current()->move << std::endl;
         //printHistory("builder fallback.", cur->node);
         cur->node->totalChilds += 10;
         back();
