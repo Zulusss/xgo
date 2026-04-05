@@ -199,16 +199,21 @@ void Grower::grow() {
                     std::cout << (xWon ? " X " : " O ")
                           << " Count: " << this->count
                           << " Rating: "
-                          << lastRating << ")"
-                          << " CURRENT SCORE -> Neuro: " << neuroWinsCount
-                          << " | Legacy: " << regularWinsCount
-                          << " | Draws: " << drawsCount;
+                          << lastRating << ")";
                     if (neuroWithNeuro) {
-                        std::cout << " Avg.Age, NNX/NNO: "
+                        std::cout
+                              << " CURRENT SCORE -> NX: " << nnXCount
+                              << " | NO: " << nnOCount
+                              << " | N-Draws: " << nnDCount
+                              << " Avg.Age, NNX/NNO: "
                               << trackerNNX->toString() << " / "
                               << trackerNNO->toString() << std::endl;
                     } else {
-                        std::cout << " Avg.Age, NX/NO/LX/LO: "
+                        std::cout
+                              << " CURRENT SCORE -> Neuro: " << neuroWinsCount
+                              << " | Legacy: " << regularWinsCount
+                              << " | Draws: " << drawsCount
+                              << " Avg.Age, NX/NO/LX/LO: "
                               << trackerNX->toString() << " / "
                               << trackerNO->toString() << " / "
                               << trackerLX->toString() << " / "
