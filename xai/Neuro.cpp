@@ -525,141 +525,116 @@ void Neuro::trainSample(const TrainSample& s) {
 //trainSample()                → 60–80%
 //trainNetworkOnCurrentPosition() → 20–40%
 void Neuro::trainNetworkOnCurrentPosition() {
-
     auto node = current()->node;
+
+    // ---------------------------
+    // 0️⃣ Проверка авторитетности узла
+    // ---------------------------
+    if (node->totalChilds < 50000) return; // мало симуляций → не учим
 
     model->train();
     optimizer->zero_grad();
 
+    // ---------------------------
     // 1️⃣ Forward
+    // ---------------------------
     auto state = getTensorFromField();
     auto [policy_logits, value] = model->forward(state);
 
-    // =========================================
+    // ---------------------------
     // 2️⃣ VALUE = текущий рейтинг узла
-    // =========================================
+    // ---------------------------
     float nodeRating = decodeRating(node->rating);
-
     auto target_value = torch::tensor({nodeRating}, torch::kFloat32)
                             .to(value.device());
-
     auto value_loss = torch::mse_loss(value, target_value);
 
-    // =========================================
-    // 3️⃣ POLICY = распределение по детям
-    // =========================================
-    struct MoveScore {
-        int idx;
-        float val;
-    };
-
-    std::vector<MoveScore> moves;
-    moves.reserve(32);
-
+    // ---------------------------
+    // 3️⃣ POLICY = Top-K по adaptive K
+    // ---------------------------
+    std::vector<std::pair<int, float>> candidates;
     for (int i = 0; i < 225; ++i) {
-
         if (kl[i] != 1) continue;
-
         auto child = getChild(node, i);
         if (!child) continue;
-
-        // фильтр слабых детей
-        if (child->totalChilds < 50 && std::abs(child->rating) < 6200)
-            continue;
+        if (child->totalChilds < 50 && std::abs(child->rating) < 6200) continue;
 
         float r = decodeRating(child->rating);
-
-        // чем больше — тем лучше ход
-        float val = -r;
-
-        moves.push_back({i, val});
+        candidates.push_back({i, -r}); // -r для текущего игрока
     }
 
-    // если мало ходов — нет смысла учить
-    if (moves.size() < 2)
-        return;
+    if (candidates.empty()) return; // нечему учиться
 
-    // =========================================
-    // 🔥 СОРТИРОВКА (лучшие сверху)
-    // =========================================
-    std::sort(moves.begin(), moves.end(),
-        [](const MoveScore& a, const MoveScore& b) {
-            return a.val > b.val;
-        });
+    std::sort(candidates.begin(), candidates.end(),
+              [](const auto &a, const auto &b){ return a.second > b.second; });
 
-    // =========================================
-    // 🔥 TOP-K
-    // =========================================
-    const int K = std::min(6, (int)moves.size()); // 4–8 нормально
+    int adaptiveK = std::min((int)candidates.size(),
+                        std::max(3, std::min(8, (int)(node->totalChilds / 30000))));
 
-    auto target_probs = torch::zeros({225}, torch::kFloat32)
-                            .to(policy_logits.device());
-
+    auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
     float sumExp = 0.0f;
-    const float T = 0.5f; // ниже → более жёсткий выбор
 
-    for (int i = 0; i < K; ++i) {
-        float e = std::exp(moves[i].val / T);
+    // ---------------------------
+    // Адаптивная температура
+    // ---------------------------
+    float T = 0.7f;
+    if (std::abs(node->rating) > 6000 ||  node->totalChilds > 10000) T = 0.5f; // хорошо изученный → увереннее
+    else if (node->totalChilds < 2000) T = 0.8f; // слабый узел → осторожно
 
-        target_probs[moves[i].idx] = e;
+    float bestVal = candidates[0].second;
+    for (int j = 0; j < adaptiveK; ++j) {
+        int idx = candidates[j].first;
+        float val = candidates[j].second;
+
+        float bonus = (val > bestVal - 0.1f) ? 1.5f : 1.0f;
+
+        float e = bonus * std::exp(val / T);
+
+        target_probs[idx] = e;
         sumExp += e;
     }
+    if (sumExp > 1e-6f) target_probs = target_probs / sumExp;
+    else return;
 
-    // нормализация
-    if (sumExp > 1e-6f) {
-        target_probs = target_probs / sumExp;
-    } else {
-        return;
-    }
-
-    int validMoves = K;
-
-    // fallback
-    if (sumExp > 1e-6f) {
-        target_probs = target_probs / sumExp;
-    } else {
-        return; // нечему учиться
-    }
-
-    // =========================================
-    // 4️⃣ POLICY LOSS
-    // =========================================
+    // ---------------------------
+    // 4️⃣ POLICY LOSS с усиленной энтропией
+    // ---------------------------
     auto log_probs = torch::log_softmax(policy_logits, 1);
-
     auto policy_loss = -torch::sum(target_probs * log_probs[0]);
 
-    // лёгкая энтропия
     auto probs = torch::softmax(policy_logits, 1);
     auto entropy = -torch::sum(probs * log_probs);
+    policy_loss = policy_loss - 0.02f * entropy; // чуть больше, чем раньше
 
-    policy_loss = policy_loss - 0.01f * entropy;
-
-    // =========================================
-    // 5️⃣ ОБЩИЙ LOSS
-    // =========================================
-    const float beta = 0.5f; // тут policy важнее!
+    // ---------------------------
+    // 5️⃣ ОБЩИЙ LOSS с адаптивным beta
+    // ---------------------------
+    float beta = 0.5f;
+    if (node->totalChilds > 50000) beta = 0.3f; // сильные узлы → value важнее
 
     auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
 
-    // L2
+    // L2-регуляризация
     float lambda = 1e-4f;
     for (auto& param : model->parameters()) {
         loss = loss + lambda * param.pow(2).sum();
     }
 
-    // =========================================
+    // ---------------------------
     // 6️⃣ BACKPROP
-    // =========================================
+    // ---------------------------
     loss.backward();
     optimizer->step();
 
-    // debug
+    // ---------------------------
+    // 7️⃣ Debug и сохранение
+    // ---------------------------
     static int dbg = 0;
     if (++dbg % 200 == 0) {
         std::cout << "[TREE TRAIN " << dbg
                   << "] childs=" << node->totalChilds
                   << " | direct=" << (int)node->totalDirectChilds
-                  << " | valid=" << validMoves
+                  << " | adaptiveK=" << adaptiveK
                   << " | value=" << value.item<float>()
                   << " | target=" << nodeRating
                   << " | loss=" << loss.item<float>()

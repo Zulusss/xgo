@@ -35,7 +35,7 @@ void Builder::buildTree() {
     i = chooseNodeToExpand();
 
     if (i == -1) {
-        std::cout << "builder fallback. count=" << count0
+        std::cout << "builder fallback. count0=" << count0
                 << " count=" << count
                 << " move=" << (int)current()->move << std::endl;
         //printHistory("builder fallback.", cur->node);
@@ -91,7 +91,7 @@ void Builder::goBack(int count0) {
             //std::cout << "[AI] added = " << added << std::endl;
 
             static int skip = 0;
-            if (++skip % (20+count*16) == 0) trainNetworkOnCurrentPosition();
+            if (++skip % (3+count*16) == 0) trainNetworkOnCurrentPosition();
         }
     }
     else
