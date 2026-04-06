@@ -37,7 +37,10 @@ void Builder::buildTree() {
     if (i == -1) {
         std::cout << "builder fallback. count0=" << count0
                 << " count=" << count
-                << " move=" << (int)current()->move << std::endl;
+                << " move=" << (int)current()->move
+                << " totalDirectChilds=" << (int)current()->node->totalDirectChilds
+                << " totalChilds=" << (int)current()->node->totalChilds
+                << std::endl;
         //printHistory("builder fallback.", cur->node);
         cur->node->totalChilds += 10;
         back();
@@ -91,7 +94,7 @@ void Builder::goBack(int count0) {
             //std::cout << "[AI] added = " << added << std::endl;
 
             static int skip = 0;
-            if (++skip % (3+count*16) == 0) trainNetworkOnCurrentPosition();
+            if (++skip % (1+count) == 0) trainNetworkOnCurrentPosition();
         }
     }
     else
@@ -128,7 +131,10 @@ void Builder::goBack(int count0) {
 
 int Builder::chooseNodeToExpand() {
     calculateChilds();
-    if (childs.count == 0) return -1;
+    if (childs.count == 0) {
+        std::cout << "Warning: child nodes not found!" << std::endl;
+        return -1;
+    }
 
     // 1. Calculate total children across all branches
     int totalAllChilds = 0; // = current()->node->totalChilds;

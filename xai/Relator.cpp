@@ -25,7 +25,7 @@ void Relator::calculateChilds() {
     childs.count = 0;
     TNode *node = current()->node;
     for (TMove i = 0; i < TOTAL_CELLS; ++i) {
-        if (isPerspectiveChild(i)) {
+        if (kl[i] <= 1) {//if (isPerspectiveChild(i)) {
             TNode* n = getChild(node, i);
             if (n != NULL) {
                 childs.move[childs.count] = i;

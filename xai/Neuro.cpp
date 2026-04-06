@@ -511,7 +511,7 @@ void Neuro::trainSample(const TrainSample& s) {
                 << " | childs=" << s.node->totalChilds
                 << " | loss=" << loss.item<float>()
                 << " | value=" << value.item<float>()
-                << " | policy_loss=" << policy_loss.item<float>()
+                //<< " | policy_loss=" << policy_loss.item<float>()
                 << std::endl;
   }
     save(loss.item<float>());
@@ -569,7 +569,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
               [](const auto &a, const auto &b){ return a.second > b.second; });
 
     int adaptiveK = std::min((int)candidates.size(),
-                        std::max(3, std::min(8, (int)(node->totalChilds / 30000))));
+        std::max(2, std::min(5, (int)(node->totalChilds / 40000))));
 
     auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
     float sumExp = 0.0f;
@@ -582,19 +582,20 @@ void Neuro::trainNetworkOnCurrentPosition() {
     else if (node->totalChilds < 2000) T = 0.8f; // слабый узел → осторожно
 
     float bestVal = candidates[0].second;
-    for (int j = 0; j < adaptiveK; ++j) {
-        int idx = candidates[j].first;
+    float cutoff = bestVal - 0.5f;
+
+    for (int j = 0; j < candidates.size() && j < adaptiveK; ++j) {
         float val = candidates[j].second;
-
-        float bonus = (val > bestVal - 0.1f) ? 1.5f : 1.0f;
-
+        if (val < cutoff && count >= 2) break;
+        int idx = candidates[j].first;
+        float bonus = (val > bestVal - 0.06f) ? 1.8f : 1.0f;
         float e = bonus * std::exp(val / T);
-
         target_probs[idx] = e;
         sumExp += e;
     }
     if (sumExp > 1e-6f) target_probs = target_probs / sumExp;
     else return;
+    target_probs = target_probs * 0.9f + 0.1f / 225;
 
     // ---------------------------
     // 4️⃣ POLICY LOSS с усиленной энтропией
@@ -638,6 +639,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   << " | value=" << value.item<float>()
                   << " | target=" << nodeRating
                   << " | loss=" << loss.item<float>()
+                  << " | policy_loss=" << policy_loss.item<float>()
                   << std::endl;
     }
 

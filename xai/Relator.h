@@ -9,19 +9,14 @@
 
 class Relator : public Evaluator {
 
-        public:
-        void calculateChilds();
-        RelativeBucket childs;
-
-        void updateParents(int addedChilds);        
-//-------------------------------------
         protected:
 
         Relator(SimplyNumbers*, Hashtable* );
-
+        void calculateChilds();
+        RelativeBucket childs;
+        void updateParents(int addedChilds);
         TNode* getChild(TNode *parent, TMove childMove);
         bool isPerspectiveChild(TMove move);
-
         bool updateNode(TNode *node, bool updateRating, int addedChilds);
 
 

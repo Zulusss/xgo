@@ -129,14 +129,14 @@ void Grower::grow() {
             if (!restartRequested && (this->count > 60 || (isWin && this->count > 1))) {
                 restartRequested = true;
 
-                if (!neuroWithNeuro && drawsCount+neuroWinsCount > 15) {
+                if (!neuroWithNeuro && drawsCount+neuroWinsXCount+neuroWinsOCount > 15) {
                     neuroWithNeuro = true;
                     if (!nwnActivated) {
                         nwnActivated = true;
                         std::cout << "    Neuro vs Neuro mode activated!" << std::endl;
                     }
                 }
-                int totalPlayed = drawsCount+neuroWinsCount+regularWinsCount+nnXCount+nnOCount+nnDCount;
+                int totalPlayed = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount+nnXCount+nnOCount+nnDCount;
                 if (neuroWithNeuro && totalPlayed%4>1) {
                     neuroWithNeuro = false;
                 }
@@ -172,7 +172,10 @@ void Grower::grow() {
                     if (log) std::cout << "[RESTART] Reason: DRAW (";
                     drawsCount++;
                 } else if (neuroWon) {
-                    neuroWinsCount++;
+                    if (xWon)
+                        neuroWinsXCount++;
+                    else
+                        neuroWinsOCount++;
                     if (log) std::cout << "[RESTART] Reason: Neuro WON (";
 
                     if (neuroPlaysO) {
@@ -181,7 +184,10 @@ void Grower::grow() {
                         trackerNX->addLoss(this->count);
                     }
                 } else {
-                    regularWinsCount++;
+                    if (xWon)
+                        regularWinsXCount++;
+                    else
+                        regularWinsOCount++;
                     if (log) std::cout << "[RESTART] Reason: Legacy WON (";
 
                     if (neuroPlaysO) {
@@ -206,8 +212,8 @@ void Grower::grow() {
                               << trackerNNO->toString() << std::endl;
                     } else {
                         std::cout
-                              << " CURRENT SCORE -> Neuro: " << neuroWinsCount
-                              << " | Legacy: " << regularWinsCount
+                              << " CURRENT SCORE -> Neuro: " << (neuroWinsXCount+neuroWinsOCount)
+                              << " | Legacy: " << (regularWinsXCount+regularWinsOCount)
                               << " | Draws: " << drawsCount
                               << " Avg.Age, NX/NO/LX/LO: "
                               << trackerNX->toString() << " / "
@@ -354,20 +360,20 @@ void Grower::grow() {
               TNode *node = lastMove();
 
               //begin hints calculation
-              calculateChilds();
-              for(i=0; i < childs.count; ++i) {
-                int r = childs.node[i]->rating;
-                if (r<min) min = r;
-                if (r>max) max = r;
-              }
-
-              memset(dkl, 0, fsize*fsize);
-              for(i=0; i<childs.count; ++i) {
-
-                int r = childs.node[i]->rating;
-                decr = min-1;
-                dkl[childs.move[i]] = 30+(r-decr)*225/(max-decr);
-              }
+//              calculateChilds();
+//              for(i=0; i < childs.count; ++i) {
+//                int r = childs.node[i]->rating;
+//                if (r<min) min = r;
+//                if (r>max) max = r;
+//              }
+//
+//              memset(dkl, 0, fsize*fsize);
+//              for(i=0; i<childs.count; ++i) {
+//
+//                int r = childs.node[i]->rating;
+//                decr = min-1;
+//                dkl[childs.move[i]] = 30+(r-decr)*225/(max-decr);
+//              }
               //end hints calculation
 
               movesCount = count;
@@ -412,7 +418,9 @@ void Grower::grow() {
               node->printPosition(msg7, 200);
               node->printScores(msg8, 200, this->count, neuroPlaysO);
 
-              sprintf(msg9, "Trained [field: %d, single: %d, f.skip: %d]", trainedFieldCount, trainedSingleCount, skipTrainFieldCount);
+              sprintf(msg9, "Wins [NX: %d, NO: %d, LX: %d, LO: %d]",
+                            neuroWinsXCount, neuroWinsOCount,
+                            regularWinsXCount, regularWinsOCount);
               //current()->printAttacks(msg9, 200);
 
 /* TODO

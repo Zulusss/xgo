@@ -34,8 +34,10 @@ protected:
         int resultRecieved;
 
 private:
-        int neuroWinsCount = 0;
-        int regularWinsCount = 0;
+        int neuroWinsXCount = 0;
+        int neuroWinsOCount = 0;
+        int regularWinsXCount = 0;
+        int regularWinsOCount = 0;
         int drawsCount = 0;
         int nnXCount = 0;
         int nnOCount = 0;
