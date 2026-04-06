@@ -422,9 +422,11 @@ void Grower::grow() {
               node->printPosition(msg7, 200);
               node->printScores(msg8, 200, this->count, neuroPlaysO);
 
-              sprintf(msg9, "Wins [NX: %d, NO: %d, LX: %d, LO: %d]",
+              sprintf(msg9, "Wins N/L [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
                             neuroWinsXCount, neuroWinsOCount,
-                            regularWinsXCount, regularWinsOCount);
+                            regularWinsXCount, regularWinsOCount, drawsCount,
+                            nnXCount, nnOCount, nnDCount
+                            );
               //current()->printAttacks(msg9, 200);
 
 /* TODO
