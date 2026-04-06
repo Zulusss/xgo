@@ -121,7 +121,7 @@ void Grower::grow() {
 
         //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
         IF_READY_FOR_TRAIN {
-            float lastRating = lastMove()->rating;
+            TRating lastRating = lastMove()->rating;
             bool isWin = std::abs(lastRating) > 16000;
             static bool neuroWithNeuro = false, nwnActivated = false;
 
@@ -216,7 +216,7 @@ void Grower::grow() {
                         std::cout
                               << " CURRENT SCORE -> Neuro: " << (neuroWinsXCount+neuroWinsOCount)
                               << " (" << std::setprecision(2)
-                                     << (neuroWinsXCount+neuroWinsOCount)*100/(float)nvlPlayedCount << "%)"
+                                     << (neuroWinsXCount+neuroWinsOCount)*100/(float)(1+nvlPlayedCount) << "%)"
                               << " | Legacy: " << (regularWinsXCount+regularWinsOCount)
                               << " | Draws: " << drawsCount
                               << " Avg.Age, NX/NO/LX/LO: "
