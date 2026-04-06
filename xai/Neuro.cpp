@@ -486,7 +486,7 @@ void Neuro::trainSample(const TrainSample& s) {
         int maxK = s.isXTurn ? 5 : 4;
 
         int adaptiveK = std::min((int)candidates.size(),
-            std::max(2, std::min(maxK, (int)(s.node->totalChilds / 40000))));
+            std::max(2, std::min(maxK, (int)(s.node->totalDirectChilds / 5))));
 
         if (adaptiveK < 2) return;
 
@@ -617,7 +617,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     int maxK = IS_X_TURN ? 5 : 4;
     int adaptiveK = std::min((int)candidates.size(),
-        std::max(2, std::min(maxK, (int)(node->totalChilds / 40000))));
+        std::max(2, std::min(maxK, (int)(node->totalDirectChilds / 5))));
 
     if (adaptiveK < 2) return;
 

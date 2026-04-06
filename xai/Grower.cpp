@@ -136,7 +136,9 @@ void Grower::grow() {
                         std::cout << "    Neuro vs Neuro mode activated!" << std::endl;
                     }
                 }
-                int totalPlayed = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount+nnXCount+nnOCount+nnDCount;
+                int nvlPlayedCount = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount;
+                int nnPlayedCount = nnXCount+nnOCount+nnDCount;
+                int totalPlayed = nvlPlayedCount+nnPlayedCount;
                 if (neuroWithNeuro && totalPlayed%4>1) {
                     neuroWithNeuro = false;
                 }
@@ -213,6 +215,8 @@ void Grower::grow() {
                     } else {
                         std::cout
                               << " CURRENT SCORE -> Neuro: " << (neuroWinsXCount+neuroWinsOCount)
+                              << " (" << std::setprecision(2)
+                                     << (neuroWinsXCount+neuroWinsOCount)*100/(float)nvlPlayedCount << "%)"
                               << " | Legacy: " << (regularWinsXCount+regularWinsOCount)
                               << " | Draws: " << drawsCount
                               << " Avg.Age, NX/NO/LX/LO: "
