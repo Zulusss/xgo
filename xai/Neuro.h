@@ -11,6 +11,8 @@
 
 #include <memory> // для shared_ptr
 
+#define IS_X_TURN (count % 2 == 0)
+
 // 1. Предварительное объявление (чтобы не тянуть тяжелый torch.h в хедер)
 struct GomokuNet;
 namespace at { class Tensor; }

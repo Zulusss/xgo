@@ -87,14 +87,14 @@ void Builder::goBack(int count0) {
         n = current()->node;
 
         // Обучаем, если позиция достаточно изучена
-        if (count > 0 && (n->totalChilds >= 10000
+        if (count > 0 && (n->totalChilds >= 40000
              || n->totalDirectChilds == 1
-             || n->totalDirectChilds <= 4 && n->totalChilds >= 1000
+             || n->totalDirectChilds <= 4 && n->totalChilds >= 5000
             )) {
             //std::cout << "[AI] added = " << added << std::endl;
 
             static int skip = 0;
-            if (++skip % (1+count) == 0) trainNetworkOnCurrentPosition();
+            if (++skip % (13+count*8) == 0) trainNetworkOnCurrentPosition();
         }
     }
     else

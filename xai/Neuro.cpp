@@ -211,7 +211,7 @@ void Neuro::addSample(TMove move) {
     sample.state = getTensorFromField(); // move ещё не сделан
     sample.move = move;
     sample.result = 0;
-    sample.isXTurn = (count % 2 == 0);
+    sample.isXTurn = IS_X_TURN;
     sample.node = current()->node;
     sample.parentRating = (count < 2
         ? current() : previous()) ->node->rating;
@@ -429,216 +429,149 @@ void Neuro::trainFromGame(bool lastPlayerWon) {
     gameHistory.clear();
 }
 
-//⚖️ Можно ли мешать обучение?
-//
-//👉 Да, но с балансом.
-//
-//Рекомендуемое соотношение:
+//⚖️ Рекомендуемое соотношение обучений:
 //trainSample()                → 60–80%
 //trainNetworkOnCurrentPosition() → 20–40%
 void Neuro::trainSample(const TrainSample& s) {
     model->train();
     optimizer->zero_grad();
 
-    // 1️⃣ Forward
     auto [policy_logits, value] = model->forward(s.state);
 
-    // 2️⃣ Value target [-1,1]
+    // =========================
+    // VALUE
+    // =========================
     float nodeRating = decodeRating(s.node->rating);
-    float gameResult = s.result * 2.0f - 1.0f; // 1 → +1, 0 → -1
+    float gameResult = s.result * 2.0f - 1.0f;
 
     const float alpha = 0.35f;
-    float combinedValue = s.node->totalChilds > 3000 || std::abs(s.node->rating) > 8000
+    float combinedValue = (s.node->totalChilds > 3000 || std::abs(s.node->rating) > 8000)
         ? nodeRating
         : alpha * nodeRating + (1.0f - alpha) * gameResult;
 
     combinedValue = std::max(-1.0f, std::min(1.0f, combinedValue));
+
     auto target_value = torch::tensor({combinedValue}, torch::kFloat32).to(value.device());
-
-    // 3️⃣ Policy loss
-    torch::Tensor policy_loss = torch::tensor(0.0f, torch::kFloat32).to(policy_logits.device());
-
-    if (s.move >= 0) {
-        auto target_move = torch::tensor({s.move}, torch::kLong).to(policy_logits.device());
-
-        policy_loss = torch::nn::functional::cross_entropy(policy_logits, target_move);
-
-        // 🔥 Advantage: насколько ход хуже позиции
-        float disAdvantage = std::abs(s.parentRating + s.node->rating);
-
-        // бонус или штраф
-        float weight = 1.5f;// [0.2 .. 1.5+]
-
-        if (disAdvantage > 0) {
-            weight -= disAdvantage/2000.0;
-            if (weight < 0.2) weight = 0.2;
-        }
-
-        policy_loss = policy_loss * weight;
-
-        // 🔥 Энтропия (оставляем)
-        auto log_probs = torch::log_softmax(policy_logits, 1);
-        auto entropy = -torch::sum(torch::softmax(policy_logits,1) * log_probs);
-
-        policy_loss = policy_loss - 0.01f * entropy;
-    }
-    // 4️⃣ Value loss (ВСЕГДА обучается)
     auto value_loss = torch::mse_loss(value, target_value);
 
-    // 5️⃣ Балансировка
-    const float beta = 0.3f; // policy слабее, чем value
-    auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
+    // =========================
+    // POLICY (Unified)
+    // =========================
+    auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
 
-    float lambda = 1e-4f; // сила L2
-    for (auto& param : model->parameters()) {
-        loss = loss + lambda * param.pow(2).sum();
-    }
-    // 🔥 Балансировка: усиливаем обучение за O
-    if (!s.isXTurn) {
-        loss = loss * 1.25f;
-    }
-    // 6️⃣ Backprop
-    loss.backward();
-    optimizer->step();
-
-    // 7️⃣ Debug
-  static int dbg = 0;
-  if (++dbg % 200 == 0)
-  {
-      std::cout << "[TRAIN " << dbg
-                << "] rating=" << nodeRating
-                << " | combined=" << combinedValue
-                << " | childs=" << s.node->totalChilds
-                << " | loss=" << loss.item<float>()
-                << " | value=" << value.item<float>()
-                //<< " | policy_loss=" << policy_loss.item<float>()
-                << std::endl;
-  }
-    save(loss.item<float>());
-}
-
-//⚖️ Можно ли мешать обучение?
-//
-//👉 Да, но с балансом.
-//
-//Рекомендуемое соотношение:
-//trainSample()                → 60–80%
-//trainNetworkOnCurrentPosition() → 20–40%
-void Neuro::trainNetworkOnCurrentPosition() {
-    auto node = current()->node;
-
-    // ---------------------------
-    // 0️⃣ Проверка авторитетности узла
-    // ---------------------------
-    if (node->totalChilds < 50000) return; // мало симуляций → не учим
-
-    model->train();
-    optimizer->zero_grad();
-
-    // ---------------------------
-    // 1️⃣ Forward
-    // ---------------------------
-    auto state = getTensorFromField();
-    auto [policy_logits, value] = model->forward(state);
-
-    // ---------------------------
-    // 2️⃣ VALUE = текущий рейтинг узла
-    // ---------------------------
-    float nodeRating = decodeRating(node->rating);
-    auto target_value = torch::tensor({nodeRating}, torch::kFloat32)
-                            .to(value.device());
-    auto value_loss = torch::mse_loss(value, target_value);
-
-    // ---------------------------
-    // 3️⃣ POLICY = Top-K по adaptive K
-    // ---------------------------
     std::vector<std::pair<int, float>> candidates;
+
     for (int i = 0; i < 225; ++i) {
         if (kl[i] != 1) continue;
-        auto child = getChild(node, i);
+
+        auto child = getChild(s.node, i);
         if (!child) continue;
-        if (child->totalChilds < 50 && std::abs(child->rating) < 6200) continue;
+
+        if (child->totalChilds < 20 && std::abs(child->rating) < 4000)
+            continue;
 
         float r = decodeRating(child->rating);
-        candidates.push_back({i, -r}); // -r для текущего игрока
+        candidates.push_back({i, -r});
     }
 
-    if (candidates.empty()) return; // нечему учиться
+    if (candidates.size() < 2) {
+        // fallback → один ход
+        if (s.move >= 0) {
+            target_probs[s.move] = 1.0f;
+        }
+    } else {
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const auto &a, const auto &b){ return a.second > b.second; });
 
-    std::sort(candidates.begin(), candidates.end(),
-              [](const auto &a, const auto &b){ return a.second > b.second; });
+        int maxK = s.isXTurn ? 5 : 4;
 
-    int adaptiveK = std::min((int)candidates.size(),
-        std::max(2, std::min(5, (int)(node->totalChilds / 40000))));
+        int adaptiveK = std::min((int)candidates.size(),
+            std::max(2, std::min(maxK, (int)(s.node->totalChilds / 40000))));
 
-    auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
-    float sumExp = 0.0f;
+        if (adaptiveK < 2) return;
 
-    // ---------------------------
-    // Адаптивная температура
-    // ---------------------------
-    float T = 0.7f;
-    if (std::abs(node->rating) > 6000 ||  node->totalChilds > 10000) T = 0.5f; // хорошо изученный → увереннее
-    else if (node->totalChilds < 2000) T = 0.8f; // слабый узел → осторожно
+        float bestVal = candidates[0].second;
+        float kthVal  = candidates[adaptiveK - 1].second;
 
-    float bestVal = candidates[0].second;
-    float cutoff = bestVal - 0.5f;
+        float spread = std::max(0.0f, bestVal - kthVal);
 
-    for (int j = 0; j < candidates.size() && j < adaptiveK; ++j) {
-        float val = candidates[j].second;
-        if (val < cutoff && count >= 2) break;
-        int idx = candidates[j].first;
-        float bonus = (val > bestVal - 0.06f) ? 1.8f : 1.0f;
-        float e = bonus * std::exp(val / T);
-        target_probs[idx] = e;
-        sumExp += e;
+        float T;
+        if (spread > 0.5f)       T = 0.35f;
+        else if (spread > 0.2f)  T = 0.5f;
+        else                     T = 0.7f;
+
+        float cutoff = bestVal - (0.3f + 0.4f * (1.0f - std::min(spread, 1.0f)));
+
+        float sumExp = 0.0f;
+        int countLocal = 0;
+
+        for (int j = 0; j < candidates.size() && j < adaptiveK; ++j) {
+            float val = candidates[j].second;
+
+            if (val < cutoff && countLocal >= 2)
+                break;
+
+            int idx = candidates[j].first;
+
+            float rel = bestVal - val;
+            float bonus = 1.0f + std::exp(-rel * 10.0f);
+
+            float e = bonus * std::exp(std::clamp(val / T, -10.0f, 10.0f));
+
+            target_probs[idx] = e;
+            sumExp += e;
+
+            countLocal++;
+        }
+
+        if (sumExp < 1e-6f) return;
+
+        target_probs = target_probs / sumExp;
+
+        // сглаживание
+        target_probs = target_probs * 0.85f + 0.15f / 225;
     }
-    if (sumExp > 1e-6f) target_probs = target_probs / sumExp;
-    else return;
-    target_probs = target_probs * 0.9f + 0.1f / 225;
 
-    // ---------------------------
-    // 4️⃣ POLICY LOSS с усиленной энтропией
-    // ---------------------------
+    // =========================
+    // POLICY LOSS
+    // =========================
     auto log_probs = torch::log_softmax(policy_logits, 1);
     auto policy_loss = -torch::sum(target_probs * log_probs[0]);
 
     auto probs = torch::softmax(policy_logits, 1);
     auto entropy = -torch::sum(probs * log_probs);
-    policy_loss = policy_loss - 0.02f * entropy; // чуть больше, чем раньше
 
-    // ---------------------------
-    // 5️⃣ ОБЩИЙ LOSS с адаптивным beta
-    // ---------------------------
+    float entropyCoef = (!s.isXTurn ? 0.04f : 0.02f);
+    policy_loss -= entropyCoef * entropy;
+
+    // =========================
+    // TOTAL LOSS
+    // =========================
     float beta = 0.5f;
-    if (node->totalChilds > 50000) beta = 0.3f; // сильные узлы → value важнее
+    if (s.node->totalChilds > 50000) beta = 0.4f;
+    if (!s.isXTurn) beta = 0.6f;
 
     auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
 
-    // L2-регуляризация
+    if (!s.isXTurn)
+        loss *= 1.4f;
+
     float lambda = 1e-4f;
     for (auto& param : model->parameters()) {
         loss = loss + lambda * param.pow(2).sum();
     }
 
-    // ---------------------------
-    // 6️⃣ BACKPROP
-    // ---------------------------
     loss.backward();
     optimizer->step();
 
-    // ---------------------------
-    // 7️⃣ Debug и сохранение
-    // ---------------------------
+    // =========================
+    // DEBUG
+    // =========================
     static int dbg = 0;
     if (++dbg % 200 == 0) {
-        std::cout << "[TREE TRAIN " << dbg
-                  << "] childs=" << node->totalChilds
-                  << " | direct=" << (int)node->totalDirectChilds
-                  << " | adaptiveK=" << adaptiveK
+        std::cout << "[TRAIN " << dbg
+                  << "] loss=" << loss.item<float>()
                   << " | value=" << value.item<float>()
-                  << " | target=" << nodeRating
-                  << " | loss=" << loss.item<float>()
                   << " | policy_loss=" << policy_loss.item<float>()
                   << std::endl;
     }
@@ -646,6 +579,160 @@ void Neuro::trainNetworkOnCurrentPosition() {
     save(loss.item<float>());
 }
 
+void Neuro::trainNetworkOnCurrentPosition() {
+    auto node = current()->node;
+
+    model->train();
+    optimizer->zero_grad();
+
+    // 1️⃣ Forward
+    auto state = getTensorFromField();
+    auto [policy_logits, value] = model->forward(state);
+
+    // 2️⃣ VALUE
+    float nodeRating = decodeRating(node->rating);
+    auto target_value = torch::tensor({nodeRating}, torch::kFloat32).to(value.device());
+    auto value_loss = torch::mse_loss(value, target_value);
+
+    // 3️⃣ Собираем кандидатов
+    std::vector<std::pair<int, float>> candidates;
+
+    for (int i = 0; i < 225; ++i) {
+        if (kl[i] != 1) continue;
+
+        auto child = getChild(node, i);
+        if (!child) continue;
+
+        if (child->totalChilds < 20 && std::abs(child->rating) < 4000)
+            continue;
+
+        float r = decodeRating(child->rating);
+        candidates.push_back({i, -r});
+    }
+
+    if (candidates.size() < 2) return;
+
+    std::sort(candidates.begin(), candidates.end(),
+              [](const auto &a, const auto &b){ return a.second > b.second; });
+
+    int maxK = IS_X_TURN ? 5 : 4;
+    int adaptiveK = std::min((int)candidates.size(),
+        std::max(2, std::min(maxK, (int)(node->totalChilds / 40000))));
+
+    if (adaptiveK < 2) return;
+
+    float bestVal = candidates[0].second;
+    float secondVal = candidates[1].second;
+    float kthVal  = candidates[adaptiveK - 1].second;
+
+    float spread = std::max(0.0f, bestVal - kthVal);
+
+    // 🔥 определяем "насколько есть явный лидер"
+    float dominance = bestVal - secondVal;
+
+    // 🔥 температура
+    float T;
+    if (spread > 0.5f)       T = 0.35f;
+    else if (spread > 0.2f)  T = 0.45f;
+    else                     T = 0.55f;
+
+    auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
+    float sumExp = 0.0f;
+
+    int countLocal = 0;
+
+    // ===============================
+    // 🔥 WINNER-TAKES-MOST
+    // ===============================
+    bool strongWinner = (dominance > 0.18f); // ключевой порог
+
+    for (int j = 0; j < candidates.size() && j < adaptiveK; ++j) {
+        float val = candidates[j].second;
+        int idx = candidates[j].first;
+
+        float e;
+
+        if (strongWinner) {
+            // 🔥 если есть явный лучший ход → усиливаем его резко
+            if (j == 0)
+                e = std::exp(val / (T * 0.8f));  // супер усиление
+            else
+                e = std::exp(val / (T * 1.5f));  // остальные сильно подавляем
+        }
+        else {
+            // обычный режим
+            float rel = bestVal - val;
+            float bonus = 1.0f + std::exp(-rel * 8.0f);
+            e = bonus * std::exp(std::clamp(val / T, -10.0f, 10.0f));
+        }
+
+        target_probs[idx] = e;
+        sumExp += e;
+
+        countLocal++;
+    }
+
+    if (sumExp < 1e-6f) return;
+
+    target_probs = target_probs / sumExp;
+
+    // 🔥 сглаживание (уменьшено)
+    float smooth = (spread < 0.2f) ? 0.15f : 0.05f;
+    target_probs = target_probs * (1.0f - smooth) + smooth / 225;
+
+    // ===============================
+    // POLICY LOSS
+    // ===============================
+    auto log_probs = torch::log_softmax(policy_logits, 1);
+    auto policy_loss = -torch::sum(target_probs * log_probs[0]);
+
+    auto probs = torch::softmax(policy_logits, 1);
+    auto entropy = -torch::sum(probs * log_probs);
+
+    float entropyCoef = (!IS_X_TURN ? 0.04f : 0.02f);
+    policy_loss -= entropyCoef * entropy;
+    policy_loss = torch::tanh(policy_loss / 3.0f) * 3.0f;
+
+    // ===============================
+    // TOTAL LOSS
+    // ===============================
+    float beta = 0.5f;
+    if (node->totalChilds > 50000) beta = 0.4f;
+    if (!IS_X_TURN) beta = 0.6f;
+
+    auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
+
+    if (!IS_X_TURN)
+        loss *= 1.4f;
+
+    float lambda = 1e-4f;
+    for (auto& param : model->parameters()) {
+        loss = loss + lambda * param.pow(2).sum();
+    }
+
+    // BACKPROP
+    loss.backward();
+    optimizer->step();
+
+    // DEBUG
+    static int dbg = 0;
+    if (++dbg % 200 == 0) {
+        std::cout << "[TREE TRAIN " << dbg
+                  << "] spread=" << spread
+                  << " | childs=" << node->totalChilds
+                  << " | direct=" << (int)node->totalDirectChilds
+                  << " | adaptiveK=" << adaptiveK
+                  << " | value=" << value.item<float>()
+                  << " | target=" << nodeRating
+                  << " | dominance=" << dominance
+                  << " | strongWinner=" << strongWinner
+                  << " | loss=" << loss.item<float>()
+                  << " | policy_loss=" << policy_loss.item<float>()
+                  << std::endl;
+    }
+
+    save(loss.item<float>());
+}
 //---------------------------------------------------------------------------
 // Преобразуем рейтинг узла в диапазон [-1, +1]
 float Neuro::decodeRating(int rating) {
