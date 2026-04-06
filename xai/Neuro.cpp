@@ -261,7 +261,7 @@ TMove Neuro::predictBestMove() {
     model->eval();
 
     static int iter = 0;
-    bool useExploration = (++iter % 19 == 0) && count < 15;
+    bool useExploration = false;//(++iter % 19 == 0) && count < 15;
 
     // 1️⃣ Forward
     auto [policy_logits, value] = model->forward(getTensorFromField());
@@ -735,13 +735,6 @@ void Neuro::trainNetworkOnCurrentPosition() {
 }
 //---------------------------------------------------------------------------
 // Преобразуем рейтинг узла в диапазон [-1, +1]
-float Neuro::decodeRating(int rating) {
-    const float maxRating = 32768.0f;  // нормализация по максимальному ожидаемому рейтингу
-    float val = static_cast<float>(rating) / maxRating;
-
-    // Ограничиваем диапазон
-    if (val > 1.0f) val = 1.0f;
-    else if (val < -1.0f) val = -1.0f;
-
-    return val;
+inline float Neuro::decodeRating(int rating) {
+    return std::tanh((float)rating / 8200.0f);
 }
