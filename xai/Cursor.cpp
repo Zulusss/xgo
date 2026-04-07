@@ -40,7 +40,7 @@ CursorHistory *Cursor::current() {
 }
 
 CursorHistory *Cursor::previous() {
-        return count < 2 ? NULL : &(history[count-2]);
+        return count < 2 ? current() : &(history[count-2]);
 }
 
 CursorHistory *Cursor::getMove(int i) {
@@ -89,7 +89,7 @@ bool Cursor::forward(TMove N) {
     ++node->totalChilds;
 
     logger->missNode(nextNode);
-    logger->log("Warning: not existed node.");
+    //logger->log("Warning: not existed node.");
   }
 
   return forward(N, nextNode);

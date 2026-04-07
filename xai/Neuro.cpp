@@ -69,9 +69,6 @@ struct GomokuNet : torch::nn::Module {
     torch::nn::Linear policy_fc{nullptr}, value_fc1{nullptr}, value_fc2{nullptr};
 };
 
-
-std::vector<TrainSample> gameHistory;//Хранилище партии
-
 // ==========================================================
 // Конструктор
 // ==========================================================
@@ -196,57 +193,12 @@ void Neuro::save(float loss) {
     }
 }
 
-
-// -----------------------------
-// addSample с временно убранным ходом
-// -----------------------------
-void Neuro::addSample(TMove move) {
-    TrainSample sample;
-
-    // --- временно убрать ход с поля ---
-    auto saved = kl[move];
-    kl[move] = 1; // считаем клетку пустой
-
-    // --- формируем тензор для сети ---
-    sample.state = getTensorFromField(); // move ещё не сделан
-    sample.move = move;
-    sample.result = 0;
-    sample.isXTurn = IS_X_TURN;
-    sample.node = current()->node;
-    sample.parentRating = (count < 2
-        ? current() : previous()) ->node->rating;
-
-    // --- вернуть ход на место ---
-    kl[move] = saved;
-
-    // --- добавить сэмпл в историю ---
-    gameHistory.push_back(sample);
-}
-
 int Neuro::moveNeuro() {
-
-    static int lastCount = 0;
-
-    //сохраняем в сэмпл предыдущий ход легаси
-    if (lastCount < count || count < lastCount && count < 2) {
-        addSample(current()->move);
-        lastCount = count;
-    }
 
     TMove move = predictBestMove();
     TNode* node = current()->node;
 
-//    static int debugGames = 0;
-//    if (count <= 3 && debugGames < 20) {
-//        std::cout << "[DEBUG] chosen move: " << (int)move << std::endl;
-//        if (count == 0) debugGames++; // считаем партии
-//    }
-
     putWithoutSwap(move);
-
-    //сохраняем сэмпл хода нейронки
-    addSample(move);
-    lastCount = count;
 
     int rat = node->rating;
     //std::cout << "[AI] best move " << (int)move << " node rating = " << rat << std::endl;
@@ -260,45 +212,8 @@ TMove Neuro::predictBestMove() {
     torch::NoGradGuard no_grad;
     model->eval();
 
-    static int iter = 0;
-    bool useExploration = false;//(++iter % 19 == 0) && count < 15;
-
     // 1️⃣ Forward
     auto [policy_logits, value] = model->forward(getTensorFromField());
-
-    // =========================================================
-    // 🔥 EXPLORATION (multinomial) — только kl[i] == 1
-    // =========================================================
-    if (useExploration) {
-
-     float T = 1.2f;
-
-     auto p = torch::softmax(policy_logits[0] / T, 0).clone();
-
-     int free = -1;
-
-     for (int i = 0; i < 225; ++i) {
-         if (kl[i] != 1) {
-             p[i] = 0.0f;
-         } else {
-             free = i;
-         }
-     }
-
-     float sum = p.sum().item<float>();
-     if (sum > 1e-6f) {
-         p = p / sum;
-
-         auto idx = torch::multinomial(p, 1).item<int>();
-
-         if (kl[idx] == 1)
-             return (TMove)idx;
-     }
-
-     // fallback
-     if (free >= 0)
-         return (TMove)free;
-    }
 
     // =========================================================
     // 🔥 EXPLOIT (argmax) — kl[i] == 1 + getChild != NULL
@@ -360,147 +275,8 @@ TMove Neuro::predictBestMove() {
     return (TMove)idx;
 }
 
-//случайный выбор multinomial)
-//TMove Neuro::predictBestMove() {
-//    torch::NoGradGuard no_grad;
-//    model->eval();
-//
-//    auto [policy_logits, value] = model->forward(getTensorFromField());
-//
-//    float T = 1.5f;
-//    auto p = torch::softmax(policy_logits[0] / T, 0).clone();
-//
-//    auto node = current()->node;
-//    for (int i = 0; i < 225; ++i) {
-//        if (kl[i] != 1 || !isExpected(node, i)) { // только пустые и ожидаемые
-//            p[i] = 0.0f;
-//        }
-//    }
-//
-//    float sum = p.sum().item<float>();
-//    if (sum > 1e-6f) {
-//        p = p / sum;
-//    } else {
-//        for (int i = 0; i < 225; ++i)
-//            if (kl[i] == 0) p[i] = 1.0f;
-//        p = p / p.sum();
-//    }
-//
-//    auto idx = torch::multinomial(p, 1).item<int>();
-//    return (TMove)idx;
-//}
-
-//// ==========================================================
-//// Получение рейтинга
-//// ==========================================================
-//TRating Neuro::getNNRating(TMove move) {
-//
-//    torch::NoGradGuard no_grad;
-//    model->eval();
-//
-//    auto output = model->forward(getTensorFromField());
-//
-//    float normVal = output[0][(int)move].item<float>();
-//
-//    model->train();
-//
-//    return decodeRating(normVal);
-//}
-
-void Neuro::trainFromGame(bool lastPlayerWon) {
-    size_t n = gameHistory.size();
-
-    static int iter = 0;
-
-    for (size_t i = 0; i < n; ++i) {
-        bool samePlayerAsWinner = ((n - 1 - i) % 2 == 0) == lastPlayerWon;
-        //if (!samePlayerAsWinner) continue;
-
-        // Победный ход игрока
-        gameHistory[i].result = samePlayerAsWinner ? 1.0f : 0.0f;
-
-//        if (samePlayerAsWinner) {
-//            if (++iter < 20) {
-//                std::cout << "training good move " << (int)(gameHistory[i].move) << std::endl;
-//            }
-//        }
-        trainSample(gameHistory[i]);
-    }
-    gameHistory.clear();
-}
-
-//⚖️ Рекомендуемое соотношение обучений:
-//trainSample()                → 60–80%
-//trainNetworkOnCurrentPosition() → 20–40%
-void Neuro::trainSample(const TrainSample& s) {
-    model->train();
-    optimizer->zero_grad();
-
-    auto [policy_logits, value] = model->forward(s.state);
-
-    // ===== VALUE =====
-    float nodeRating = decodeRating(s.node->rating);
-    float gameResult = s.result * 2.0f - 1.0f;
-
-    float combinedValue = (s.node->totalChilds > 3000)
-        ? nodeRating
-        : 0.5f * nodeRating + 0.5f * gameResult;
-
-    auto target_value = torch::tensor({combinedValue}, torch::kFloat32).to(value.device());
-    auto value_loss = torch::mse_loss(value, target_value);
-
-    // ===== POLICY =====
-    auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
-
-    if (s.move >= 0)
-        target_probs[s.move] = 1.0f;
-
-    // 🔥 лёгкое размытие
-    target_probs = target_probs * 0.94f + 0.06f / 225;
-
-    auto log_probs = torch::log_softmax(policy_logits, 1);
-    auto policy_loss = -torch::sum(target_probs * log_probs[0]);
-
-    auto probs = torch::softmax(policy_logits, 1);
-    auto entropy = -torch::sum(probs * log_probs);
-
-    float entropyCoef = (!s.isXTurn ? 0.04f : 0.02f);
-    policy_loss -= entropyCoef * entropy;
-
-    policy_loss = torch::tanh(policy_loss / 3.0f) * 3.0f;
-
-    // ===== TOTAL LOSS =====
-    float beta = 0.4f;
-    if (!s.isXTurn) beta = 0.6f;
-
-    auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
-
-    if (!s.isXTurn)
-        loss *= 1.6f;
-
-    float lambda = 1e-4f;
-    for (auto& param : model->parameters())
-        loss += lambda * param.pow(2).sum();
-
-    loss.backward();
-    optimizer->step();
-
-    // =========================
-    // DEBUG
-    // =========================
-    static int dbg = 0;
-    if (++dbg % 200 == 0) {
-        std::cout << "[TRAIN " << dbg
-                  << "] loss=" << loss.item<float>()
-                  << " | value=" << value.item<float>()
-                  << " | policy_loss=" << policy_loss.item<float>()
-                  << std::endl;
-    }
-
-    save(loss.item<float>());
-}
-
 void Neuro::trainNetworkOnCurrentPosition() {
+    auto parentRating = previous()->node->rating;
     auto node = current()->node;
 
     model->train();
@@ -511,7 +287,8 @@ void Neuro::trainNetworkOnCurrentPosition() {
     auto [policy_logits, value] = model->forward(state);
 
     // 2️⃣ VALUE
-    float nodeRating = decodeRating(node->rating);
+    TRating nodeRating0 = node->rating;
+    float nodeRating = decodeRating(nodeRating0+parentRating);
     auto target_value = torch::tensor({nodeRating}, torch::kFloat32).to(value.device());
     auto value_loss = torch::mse_loss(value, target_value);
 
@@ -524,12 +301,8 @@ void Neuro::trainNetworkOnCurrentPosition() {
         auto child = getChild(node, i);
         if (!child) continue;
 
-        // 🔥 смягчённый фильтр
-        if (child->totalChilds < 10 && std::abs(child->rating) < 2000)
-            continue;
-
-        float r = decodeRating(child->rating);
-        candidates.push_back({i, -r});
+        float r = decodeRating(child->rating+nodeRating0);
+        candidates.push_back({i, r});
     }
 
     if (candidates.size() < 2) return;
@@ -612,19 +385,20 @@ void Neuro::trainNetworkOnCurrentPosition() {
     if (++dbg % 200 == 0) {
         std::cout << "[TREE TRAIN " << dbg
                   << "] spread=" << spread
-                  << " | childs=" << node->totalChilds
-                  << " | direct=" << (int)node->totalDirectChilds
-                  << " | adaptiveK=" << adaptiveK
-                  << " | value=" << value.item<float>()
-                  << " | target=" << nodeRating
-                  << " | loss=" << loss.item<float>()
-                  << " | policy_loss=" << policy_loss.item<float>()
+                  << " avg target=" << target_probs.mean().item<float>()
+                  << " childs=" << node->totalChilds
+                  << " direct=" << (int)node->totalDirectChilds
+                  << " adaptiveK=" << adaptiveK
+                  << " value=" << value.item<float>()
+                  << " target=" << nodeRating
+                  << " loss=" << loss.item<float>()
+                  << " policy_loss=" << policy_loss.item<float>()
                   << std::endl;
     }
 
     save(loss.item<float>());
 }//---------------------------------------------------------------------------
-// Преобразуем рейтинг узла в диапазон [-1, +1]
-inline float Neuro::decodeRating(int rating) {
-    return std::tanh((float)rating / 8200.0f);
+// Преобразуем рейтинг узла в диапазон [-1, 0]
+inline float Neuro::decodeRating(int ratingPlusParentRating) {
+    return std::tanh(ratingPlusParentRating / 8000.0f);
 }

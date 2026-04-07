@@ -143,6 +143,7 @@ void Grower::grow() {
                 if (neuroWithNeuro && totalPlayed%4>1) {
                     neuroWithNeuro = false;
                 }
+                childPerMove = neuroWithNeuro ? 500 : 13000;
 
                 bool xWon = this->count % 2 == lastRating > 0;
 
@@ -227,8 +228,6 @@ void Grower::grow() {
                               << trackerLO->toString() << std::endl;
                     }
                  }
-
-                trainFromGame( lastRating > 0);
 
                 // Смена ролей и сброс
                 if (neuroPlays) neuroPlaysO = !neuroPlaysO;
@@ -425,7 +424,7 @@ void Grower::grow() {
 
               int nvlPlayedCount = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount;
 
-              sprintf(msg9, "Wins N/L %.2f% [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
+              sprintf(msg9, "Wins N/L %.2f%% [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
                             (neuroWinsXCount + neuroWinsOCount) * 100.0f / (1 + nvlPlayedCount),
                             neuroWinsXCount, neuroWinsOCount,
                             regularWinsXCount, regularWinsOCount, drawsCount,
