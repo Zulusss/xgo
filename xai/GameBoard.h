@@ -16,6 +16,7 @@ public:
 
 protected:
         bool put(TMove N);//can flip board
+        bool putWithoutSwap(TMove N);//no flip but can affect other cell (if position is symmetric)
         int move();
         int transform(int x, int y);
 

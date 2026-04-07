@@ -90,7 +90,7 @@ typedef signed short int TRating;
       TNode *next;
 
       void printPosition(char* buffer, size_t size);
-      void printScores(char* buffer, size_t size, int count, bool neuroPlaysO);
+      void printScores(char* buffer, size_t size, int count, bool neuroPlaysO, bool nwn);
 
     };
 

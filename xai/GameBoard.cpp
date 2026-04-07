@@ -71,6 +71,42 @@ bool GameBoard::put(TMove N) {
     return ret;
 };
 
+bool GameBoard::putWithoutSwap(TMove N) {
+    int x = N%fsize - 7;
+    int y = N/fsize - 7;
+    bool swapped = false;
+
+    if (history[count-1].symmX  == 0) {
+        if (x < 0) {
+            x = -x;
+        }
+        //logger->log("swapped X");
+    }
+    if ((  history[count-1].symmY  == 0 || history[count].symmXY  == 0) && y < 0) {
+            y = -y;
+            //logger->log("swapped Y");
+    }
+
+
+    if (x<y && history[count-1].symmW == 0) {
+            int t = x;
+            x = y;
+            y = t;
+            //logger->log("swapped W");
+    } else if (x+y<0 && history[count-1].symmXYW == 0) {
+            int t = x;
+            x = -y;
+            y = -t;
+            //logger->log("swapped XYW");
+    }
+
+    bool ret = forward((y+7)*15+(x+7));
+    if (!ret) {
+        logger->log("Move not found");
+    }
+    return ret;
+};
+
 
 int GameBoard::move() {
 

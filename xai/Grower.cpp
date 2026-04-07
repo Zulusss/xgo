@@ -51,6 +51,8 @@ void Grower::grow() {
 
   bool neuroPlays = true;
   bool neuroPlaysO = true;
+  bool neuroWithNeuro = false;
+  bool nwnActivated = false;
    
 //  unsigned long beginTime = GetTickCount();
   while (!exitRequested) {
@@ -123,13 +125,12 @@ void Grower::grow() {
         IF_READY_FOR_TRAIN {
             TRating lastRating = lastMove()->rating;
             bool isWin = std::abs(lastRating) > 16000;
-            static bool neuroWithNeuro = false, nwnActivated = false;
 
             // Условие перезапуска: победный рейтинг или лимит ходов
             if (!restartRequested && (this->count > 60 || (isWin && this->count > 1))) {
                 restartRequested = true;
 
-                if (!neuroWithNeuro) && drawsCount+neuroWinsXCount+neuroWinsOCount >= 3) {
+                if (!neuroWithNeuro && drawsCount+neuroWinsXCount+neuroWinsOCount >= 3) {
                     neuroWithNeuro = true;
                     if (!nwnActivated) {
                         nwnActivated = true;
@@ -420,7 +421,7 @@ void Grower::grow() {
 
               logger->printMissStats(msg6);
               node->printPosition(msg7, 200);
-              node->printScores(msg8, 200, this->count, neuroPlaysO);
+              node->printScores(msg8, 200, this->count, neuroPlaysO, neuroWithNeuro);
 
               sprintf(msg9, "Wins N/L [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
                             neuroWinsXCount, neuroWinsOCount,

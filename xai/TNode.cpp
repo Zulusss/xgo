@@ -75,9 +75,10 @@ void TNode::printPosition(char* buffer, size_t size) {
 }
 
 // Печатает счётчики двоек, троек и четвёрок для каждого игрока
-void TNode::printScores(char* buffer, size_t size, int count, bool neuroPlaysO) {
+void TNode::printScores(char* buffer, size_t size, int count, bool neuroPlaysO, bool neuroWithNeuro) {
     snprintf(buffer, size, "%s %d: %d+%d+%d / %d+%d+%d Next move: %c",
-            neuroPlaysO ? "NO" : "NX",
+            neuroWithNeuro ? (neuroPlaysO ? "NNO" : "NNX")
+                : neuroPlaysO ? "NO" : "NX",
             count,
              (int)o4, (int)o3, (int)o2,
              (int)x4, (int)x3, (int)x2,

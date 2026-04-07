@@ -242,7 +242,7 @@ int Neuro::moveNeuro() {
 //        if (count == 0) debugGames++; // считаем партии
 //    }
 
-    put(move);
+    putWithoutSwap(move);
 
     //сохраняем сэмпл хода нейронки
     addSample(move);
