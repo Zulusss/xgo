@@ -305,15 +305,15 @@ void Neuro::trainNetworkOnCurrentPosition() {
         candidates.push_back({i, r});
     }
 
-    if (candidates.size() < 2) return;
+    if (candidates.empty()) return;
 
+    // Сортировка по рейтингу (убывание)
     std::sort(candidates.begin(), candidates.end(),
               [](const auto &a, const auto &b){ return a.second > b.second; });
 
     int maxK = IS_X_TURN ? 5 : 6;
 
-    int adaptiveK = std::min((int)candidates.size(),
-        std::max(4, std::min(maxK, (int)(node->totalDirectChilds))));
+    int adaptiveK = std::min((int)candidates.size(), std::min(maxK, (int)node->totalDirectChilds));
 
     float bestVal = candidates[0].second;
     float kthVal  = candidates[adaptiveK - 1].second;
@@ -323,8 +323,9 @@ void Neuro::trainNetworkOnCurrentPosition() {
     float T;
     if (spread > 0.5f)       T = 0.35f;
     else if (spread > 0.2f)  T = 0.45f;
-    else                     T = 0.5f;   // 🔥 было 0.7 → фикс
+    else                     T = 0.5f;
 
+    // 4️⃣ Формируем целевое распределение для policy
     auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
     float sumExp = 0.0f;
 
@@ -343,11 +344,10 @@ void Neuro::trainNetworkOnCurrentPosition() {
         sumExp += e;
     }
 
-    if (sumExp < 1e-6f) return;
+    if (sumExp > 1e-6f)
+        target_probs /= sumExp;
 
-    target_probs /= sumExp;
-
-    // 🔥 меньше размытия
+    // 🔥 Немного размазываем распределение
     target_probs = target_probs * 0.92f + 0.08f / 225;
 
     // ===== POLICY LOSS =====
@@ -360,19 +360,16 @@ void Neuro::trainNetworkOnCurrentPosition() {
     float entropyCoef = (!IS_X_TURN ? 0.04f : 0.02f);
     policy_loss -= entropyCoef * entropy;
 
-    // 🔥 мягкий clamp
     policy_loss = torch::tanh(policy_loss / 3.0f) * 3.0f;
 
     // ===== TOTAL LOSS =====
-    float beta = 0.5f;
-    if (node->totalChilds > 50000) beta = 0.4f;
-    if (!IS_X_TURN) beta = 0.6f;
+    float beta = (!IS_X_TURN) ? 0.6f
+        : (node->totalChilds > 50000) ? 0.4f : 0.5f;
 
     auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
+    if (!IS_X_TURN) loss *= 1.6f;
 
-    if (!IS_X_TURN)
-        loss *= 1.6f;
-
+    // L2 регуляризация
     float lambda = 1e-4f;
     for (auto& param : model->parameters())
         loss += lambda * param.pow(2).sum();
@@ -380,7 +377,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
     loss.backward();
     optimizer->step();
 
-    // DEBUG
+    // 🔹 Логгирование
     static int dbg = 0;
     if (++dbg % 200 == 0) {
         std::cout << "[TREE TRAIN " << dbg
@@ -397,8 +394,10 @@ void Neuro::trainNetworkOnCurrentPosition() {
     }
 
     save(loss.item<float>());
-}//---------------------------------------------------------------------------
+}
+
+//---------------------------------------------------------------------------
 // Преобразуем рейтинг узла в диапазон [-1, 0]
 inline float Neuro::decodeRating(int ratingPlusParentRating) {
-    return std::tanh(ratingPlusParentRating / 8000.0f);
+    return std::tanh((ratingPlusParentRating+2000) / 4000.0f);
 }
