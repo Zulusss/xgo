@@ -129,7 +129,7 @@ void Grower::grow() {
             if (!restartRequested && (this->count > 60 || (isWin && this->count > 1))) {
                 restartRequested = true;
 
-                if (!neuroWithNeuro && drawsCount+neuroWinsXCount+neuroWinsOCount > 15) {
+                if (!neuroWithNeuro) && drawsCount+neuroWinsXCount+neuroWinsOCount >= 3) {
                     neuroWithNeuro = true;
                     if (!nwnActivated) {
                         nwnActivated = true;

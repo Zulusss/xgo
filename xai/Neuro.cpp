@@ -540,7 +540,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
     int maxK = IS_X_TURN ? 5 : 6;
 
     int adaptiveK = std::min((int)candidates.size(),
-        std::max(3, std::min(maxK, (int)(node->totalDirectChilds))));
+        std::max(4, std::min(maxK, (int)(node->totalDirectChilds))));
 
     float bestVal = candidates[0].second;
     float kthVal  = candidates[adaptiveK - 1].second;
@@ -561,7 +561,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
         float rel = bestVal - val;
 
-        float bonus = 1.0f + std::exp(-rel * 10.0f);
+        float bonus = 1.0f + std::exp(-rel * 12.0f);
 
         float x = std::clamp(val / T, -10.0f, 10.0f);
         float e = bonus * std::exp(x);
@@ -575,7 +575,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
     target_probs /= sumExp;
 
     // 🔥 меньше размытия
-    target_probs = target_probs * 0.9f + 0.1f / 225;
+    target_probs = target_probs * 0.92f + 0.08f / 225;
 
     // ===== POLICY LOSS =====
     auto log_probs = torch::log_softmax(policy_logits, 1);
