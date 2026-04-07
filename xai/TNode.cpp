@@ -281,3 +281,7 @@ bool TNode::isRageDef() {
 bool TNode::isRageAny() {
     return (flags & (FLAG_RAGE_ATTACK | FLAG_RAGE_DEF)) != 0;
 }
+
+bool TNode::isCheck() {
+    return o3 || o4 || x3 || x4;
+}

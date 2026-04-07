@@ -307,11 +307,11 @@ TMove Neuro::predictBestMove() {
     auto p = torch::softmax(policy_logits[0], 0).clone();
 
     auto node = current()->node;
-
+    bool isCheck = node->isCheck();
     int free = -1;
 
     for (int i = 0; i < 225; ++i) {
-     if (kl[i] != 1 || getChild(node, i) == NULL) {
+     if (kl[i] != 1 || isCheck && getChild(node, i) == NULL) {
          p[i] = 0.0f;
      } else {
          free = i;
@@ -334,14 +334,14 @@ TMove Neuro::predictBestMove() {
 
     auto idx = torch::argmax(p).item<int>();
 
-    if (kl[idx] != 1 || getChild(node, idx) == NULL) {
+    if (kl[idx] != 1 || isCheck && getChild(node, idx) == NULL) {
      std::cout << "argmax попал в запрещённую клетку, ищем вручную" << std::endl;
 
      float best = -1.0f;
      int bestIdx = -1;
 
      for (int i = 0; i < 225; ++i) {
-         if (kl[i] == 1 && getChild(node, i) != NULL) {
+         if (kl[i] == 1 && (!isCheck || getChild(node, i) != NULL)) {
              float val = p[i].item<float>();
              if (val > best) {
                  best = val;

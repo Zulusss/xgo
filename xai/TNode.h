@@ -91,6 +91,7 @@ typedef signed short int TRating;
 
       void printPosition(char* buffer, size_t size);
       void printScores(char* buffer, size_t size, int count, bool neuroPlaysO, bool nwn);
+      bool isCheck();
 
     };
 
