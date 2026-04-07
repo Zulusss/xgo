@@ -55,7 +55,9 @@ void Builder::buildTree() {
 
   int added = cur->node->totalChilds;
 
-  goBack(count0);
+  while(count>count0) {
+    back();
+  }
 
   building = false;
 
@@ -94,7 +96,7 @@ void Builder::goBack(int count0) {
             //std::cout << "[AI] added = " << added << std::endl;
 
             static int skip = 0;
-            if (++skip % (11+count*4) == 0) trainNetworkOnCurrentPosition();
+            if (count > 3 || ++skip % 43 == 0) trainNetworkOnCurrentPosition();
         }
     }
     else

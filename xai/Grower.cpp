@@ -252,7 +252,7 @@ void Grower::grow() {
         //********* STEP 2   process requested actions ***************
         if (restartRequested) {
             restartRequested = false;
-            //goBack(1);
+            goBack(1);
             restart();
             //std::cout << "restarted" << std::endl;
         } else if (userMoveRequested != 255) {
