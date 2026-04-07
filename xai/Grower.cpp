@@ -423,7 +423,10 @@ void Grower::grow() {
               node->printPosition(msg7, 200);
               node->printScores(msg8, 200, this->count, neuroPlaysO, neuroWithNeuro);
 
-              sprintf(msg9, "Wins N/L [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
+              int nvlPlayedCount = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount;
+
+              sprintf(msg9, "Wins N/L %.2f% [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
+                            (neuroWinsXCount + neuroWinsOCount) * 100.0f / (1 + nvlPlayedCount),
                             neuroWinsXCount, neuroWinsOCount,
                             regularWinsXCount, regularWinsOCount, drawsCount,
                             nnXCount, nnOCount, nnDCount

@@ -94,7 +94,7 @@ void Builder::goBack(int count0) {
             //std::cout << "[AI] added = " << added << std::endl;
 
             static int skip = 0;
-            if (++skip % (3+count*8) == 0) trainNetworkOnCurrentPosition();
+            if (++skip % (11+count*4) == 0) trainNetworkOnCurrentPosition();
         }
     }
     else

@@ -456,7 +456,7 @@ void Neuro::trainSample(const TrainSample& s) {
         target_probs[s.move] = 1.0f;
 
     // 🔥 лёгкое размытие
-    target_probs = target_probs * 0.9f + 0.1f / 225;
+    target_probs = target_probs * 0.94f + 0.06f / 225;
 
     auto log_probs = torch::log_softmax(policy_logits, 1);
     auto policy_loss = -torch::sum(target_probs * log_probs[0]);
