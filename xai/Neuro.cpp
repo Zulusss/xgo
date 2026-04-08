@@ -399,5 +399,5 @@ void Neuro::trainNetworkOnCurrentPosition() {
 //---------------------------------------------------------------------------
 // Преобразуем рейтинг узла в диапазон [-1, 0]
 inline float Neuro::decodeRating(int ratingPlusParentRating) {
-    return std::tanh(ratingPlusParentRating / 6000.0f);
+    return std::tanh(ratingPlusParentRating / 8000.0f);
 }
