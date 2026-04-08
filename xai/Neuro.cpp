@@ -17,53 +17,53 @@
 // -----------------------------
 struct GomokuNet : torch::nn::Module {
     GomokuNet() {
-        conv1 = register_module("conv1",
-            torch::nn::Conv2d(torch::nn::Conv2dOptions(2, 64, 3).padding(1)));
-        conv2 = register_module("conv2",
-            torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)));
-        conv3 = register_module("conv3",
-            torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 128, 3).padding(1)));
+        // Общие сверточные слои
+        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(2, 64, 3).padding(1)));
+        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)));
+        conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 128, 3).padding(1)));
 
-        // policy head
-        policy_conv = register_module("policy_conv",
-            torch::nn::Conv2d(torch::nn::Conv2dOptions(128, 2, 1)));
-        policy_fc = register_module("policy_fc",
-            torch::nn::Linear(2 * 15 * 15, 225)); // линейный, без ReLU
+        // Policy head
+        policy_conv = register_module("policy_conv", torch::nn::Conv2d(torch::nn::Conv2dOptions(128, 2, 1)));
+        policy_fc   = register_module("policy_fc", torch::nn::Linear(2 * 15 * 15, 225));
 
-        // value head
-        value_conv = register_module("value_conv",
-            torch::nn::Conv2d(torch::nn::Conv2dOptions(128, 1, 1)));
-        value_fc1 = register_module("value_fc1",
-            torch::nn::Linear(15 * 15, 64));
-        value_fc2 = register_module("value_fc2",
-            torch::nn::Linear(64, 1));
+        // Value head
+        value_conv = register_module("value_conv", torch::nn::Conv2d(torch::nn::Conv2dOptions(128, 1, 1)));
+        value_fc1  = register_module("value_fc1", torch::nn::Linear(15 * 15, 64));
+        value_fc2  = register_module("value_fc2", torch::nn::Linear(64, 1));
     }
 
-    std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x) {
-        // --- общие conv слои ---
-        x = torch::relu(conv1->forward(x));
-        x = torch::relu(conv2->forward(x));
-        x = torch::relu(conv3->forward(x));
+    // --- Forward pass ---
+    std::tuple<torch::Tensor, torch::Tensor> forward(torch::Tensor x) {
+        // Общие conv слои с leaky ReLU
+        x = torch::leaky_relu(conv1->forward(x), 0.01);
+        x = torch::leaky_relu(conv2->forward(x), 0.01);
+        x = torch::leaky_relu(conv3->forward(x), 0.01);
 
-        // --- policy head (без ReLU) ---
+        // Policy head
         auto p = policy_conv->forward(x);
         p = p.view({p.size(0), -1});
         p = policy_fc->forward(p);
 
-        // --- value head ---
-        auto v = torch::relu(value_conv->forward(x));
+        // Value head
+        auto v = value_conv->forward(x);
         v = v.view({v.size(0), -1});
-        v = torch::relu(value_fc1->forward(v));
+        v = torch::leaky_relu(value_fc1->forward(v), 0.01);
 
-        // 🔥 Dropout только во время обучения
+        // Dropout только в режиме обучения
         if (this->is_training()) {
-            v = torch::dropout(v, /*p=*/0.15, /*train=*/true); // оставляем 85% нейронов
+            v = torch::dropout(v, /*p=*/0.15, /*train=*/true);
         }
 
-        v = torch::tanh(value_fc2->forward(v)); // [-1, 1]
+        v = decodeAbsRating(value_fc2->forward(v));
 
-        return {p, v};
+        return std::make_tuple(p, v);
     }
+
+    torch::Tensor decodeAbsRating(torch::Tensor raw) {
+        return 0.63661978 * torch::atan(raw / 2000.0f);
+    }
+
+    // Слои
     torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
     torch::nn::Conv2d policy_conv{nullptr}, value_conv{nullptr};
     torch::nn::Linear policy_fc{nullptr}, value_fc1{nullptr}, value_fc2{nullptr};
@@ -79,14 +79,14 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
     setenv("NNPACK_MODE", "0", 1);
 #endif
 
-    lossTracker = new LossTracker(3000);
+    lossTracker = new MovingAverage(3000);
 
-    trackerNX = new LossTracker(30);
-    trackerNO = new LossTracker(30);
-    trackerLX = new LossTracker(30);
-    trackerLO = new LossTracker(30);
-    trackerNNX = new LossTracker(30);
-    trackerNNO = new LossTracker(30);
+    trackerNX = new MovingAverage(30);
+    trackerNO = new MovingAverage(30);
+    trackerLX = new MovingAverage(30);
+    trackerLO = new MovingAverage(30);
+    trackerNNX = new MovingAverage(30);
+    trackerNNO = new MovingAverage(30);
 
     trainedFieldCount = 0;
     trainedSingleCount = 0;
@@ -169,7 +169,7 @@ torch::Tensor Neuro::getTensorFromField() {
 void Neuro::save(float loss) {
 
     static int iter = 0;
-    lossTracker->addLoss(loss);
+    lossTracker->put(loss);
 
     if (++iter % 1000 == 0) {
         try {
@@ -276,7 +276,6 @@ TMove Neuro::predictBestMove() {
 }
 
 void Neuro::trainNetworkOnCurrentPosition() {
-    auto parentRating = previous()->node->rating;
     auto node = current()->node;
 
     model->train();
@@ -288,7 +287,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // 2️⃣ VALUE
     TRating nodeRating0 = node->rating;
-    float nodeRating = decodeRating(nodeRating0+parentRating);
+    float nodeRating = decodeAbsRating(nodeRating0);//для value head, абсолютная оценка
     auto target_value = torch::tensor({nodeRating}, torch::kFloat32).to(value.device());
     auto value_loss = torch::mse_loss(value, target_value);
 
@@ -301,7 +300,8 @@ void Neuro::trainNetworkOnCurrentPosition() {
         auto child = getChild(node, i);
         if (!child) continue;
 
-        float r = decodeRating(child->rating+nodeRating0);
+        //для policy head, относительная оценка <=0, ноль означает лучший ход
+        float r = (child->rating + nodeRating0) / 2000.0f;
         candidates.push_back({i, r});
     }
 
@@ -360,8 +360,6 @@ void Neuro::trainNetworkOnCurrentPosition() {
     float entropyCoef = (!IS_X_TURN ? 0.04f : 0.02f);
     policy_loss -= entropyCoef * entropy;
 
-    policy_loss = torch::tanh(policy_loss / 3.0f) * 3.0f;
-
     // ===== TOTAL LOSS =====
     float beta = (!IS_X_TURN) ? 0.6f
         : (node->totalChilds > 50000) ? 0.4f : 0.5f;
@@ -398,6 +396,6 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
 //---------------------------------------------------------------------------
 // Преобразуем рейтинг узла в диапазон [-1, 0]
-inline float Neuro::decodeRating(int ratingPlusParentRating) {
-    return std::tanh(ratingPlusParentRating / 8000.0f);
+inline float Neuro::decodeAbsRating(int r) {
+    return 0.63661978 * std::atan(r / 2000.0f);
 }

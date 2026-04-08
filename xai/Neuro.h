@@ -18,17 +18,21 @@ struct GomokuNet;
 namespace at { class Tensor; }
 namespace torch { namespace optim { class Adam; } } // для оптимизатора
 
-class LossTracker {
+class MovingAverage {
 
 private:
     float movingAverage = 0.0f;
     int count = 0; // Счётчик вызовов
-    const int threshold;
+    const int threshold; // максимальное количество усредняемых последних измерений
 
 public:
-    explicit LossTracker(int t = 10) : threshold(t > 0 ? t : 1) {}
+    explicit MovingAverage(int t = 10) : threshold(t > 0 ? t : 1) {}
 
-    void addLoss(float loss) {
+    float get() {
+        return movingAverage;
+    }
+
+    void put(float f) {
         count++;
 
         // Определяем вес нового значения (альфа)
@@ -37,10 +41,10 @@ public:
         float alpha = (count <= threshold) ? (1.0f / count) : (1.0f / threshold);
 
         if (count == 1) {
-            movingAverage = loss;
+            movingAverage = f;
         } else {
             // Формула скользящего среднего
-            movingAverage = (loss * alpha) + (movingAverage * (1.0f - alpha));
+            movingAverage = (f * alpha) + (movingAverage * (1.0f - alpha));
         }
     }
 
@@ -95,11 +99,11 @@ protected:
     int trainedSingleCount;
     int skipTrainFieldCount;
 
-    LossTracker *trackerNX, *trackerNO, *trackerLX, *trackerLO, *trackerNNX, *trackerNNO;
+    MovingAverage *trackerNX, *trackerNO, *trackerLX, *trackerLO, *trackerNNX, *trackerNNO;
 
 
 private:
-    LossTracker *lossTracker;
+    MovingAverage *lossTracker;
 
     //Указатели на нейросеть и её оптимизатор
     std::shared_ptr<GomokuNet> model;
@@ -110,7 +114,7 @@ private:
     void addSample(TMove move);
     TMove predictBestMove();
     TRating getNNRating(TMove move);
-    inline float decodeRating(int rating);
+    inline float decodeAbsRating(int rating);
 
 };
 

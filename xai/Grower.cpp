@@ -164,11 +164,11 @@ void Grower::grow() {
                         nnDCount++;
                     }
                     else if (xWon) {
-                        trackerNNX->addLoss(this->count);
+                        trackerNNX->put(this->count);
                         if (log) std::cout << "[RESTART] Reason: NX WON (";
                         nnXCount++;
                     } else {
-                        trackerNNO->addLoss(this->count);
+                        trackerNNO->put(this->count);
                         if (log) std::cout << "[RESTART] Reason: NO WON (";
                         nnOCount++;
                     }
@@ -184,9 +184,9 @@ void Grower::grow() {
                     if (log) std::cout << "[RESTART] Reason: Neuro WON (";
 
                     if (neuroPlaysO) {
-                        trackerNO->addLoss(this->count);
+                        trackerNO->put(this->count);
                     } else {
-                        trackerNX->addLoss(this->count);
+                        trackerNX->put(this->count);
                     }
                 } else {
                     if (xWon)
@@ -196,9 +196,9 @@ void Grower::grow() {
                     if (log) std::cout << "[RESTART] Reason: Legacy WON (";
 
                     if (neuroPlaysO) {
-                        trackerLX->addLoss(this->count);
+                        trackerLX->put(this->count);
                     } else {
-                        trackerLO->addLoss(this->count);
+                        trackerLO->put(this->count);
                     }
                 }
 
@@ -426,7 +426,7 @@ void Grower::grow() {
 
               int nvlPlayedCount = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount;
 
-              sprintf(msg9, "Wins N/L %.2f%% [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
+              sprintf(msg9, "Wins N/L %.1f%% [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
                             (neuroWinsXCount + neuroWinsOCount) * 100.0f / (1 + nvlPlayedCount),
                             neuroWinsXCount, neuroWinsOCount,
                             regularWinsXCount, regularWinsOCount, drawsCount,
