@@ -114,7 +114,6 @@ private:
     void addSample(TMove move);
     TMove predictBestMove();
     TRating getNNRating(TMove move);
-    inline float decodeAbsRating(int rating);
 
 };
 

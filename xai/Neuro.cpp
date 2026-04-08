@@ -60,7 +60,7 @@ struct GomokuNet : torch::nn::Module {
     }
 
     torch::Tensor decodeAbsRating(torch::Tensor raw) {
-        return 0.63661978 * torch::atan(raw / 2000.0f);
+        return 0.63661978 * torch::atan(raw / 2600.0f);
     }
 
     // Слои
@@ -287,8 +287,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     // 2️⃣ VALUE
     TRating nodeRating0 = node->rating;
-    float nodeRating = decodeAbsRating(nodeRating0);//для value head, абсолютная оценка
-    auto target_value = torch::tensor({nodeRating}, torch::kFloat32).to(value.device());
+    auto target_value = model->decodeAbsRating(torch::tensor({(float)nodeRating0}, torch::kFloat32).to(value.device()));
     auto value_loss = torch::mse_loss(value, target_value);
 
     // 3️⃣ Собираем кандидатов
@@ -301,7 +300,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         if (!child) continue;
 
         //для policy head, относительная оценка <=0, ноль означает лучший ход
-        float r = (child->rating + nodeRating0) / 2000.0f;
+        float r = model->decodeAbsRating(torch::tensor({(float)(child->rating + nodeRating0)}, torch::kFloat32)).item<float>();
         candidates.push_back({i, r});
     }
 
@@ -385,17 +384,11 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   << " direct=" << (int)node->totalDirectChilds
                   << " adaptiveK=" << adaptiveK
                   << " value=" << value.item<float>()
-                  << " target=" << nodeRating
+                  << " target=" << target_value
                   << " loss=" << loss.item<float>()
                   << " policy_loss=" << policy_loss.item<float>()
                   << std::endl;
     }
 
     save(loss.item<float>());
-}
-
-//---------------------------------------------------------------------------
-// Преобразуем рейтинг узла в диапазон [-1, 0]
-inline float Neuro::decodeAbsRating(int r) {
-    return 0.63661978 * std::atan(r / 2000.0f);
 }
