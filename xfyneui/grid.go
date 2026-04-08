@@ -18,6 +18,38 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 
 	board := &board{gb: gb}
 
+	// 1. Определяем мапу соответствия Код -> Название
+	modeToName := map[string]string{
+		"HH": "Human vs Human",
+		"HN": "Human vs Neuro",
+		"HL": "Human vs Legacy",
+		"TM": "Neuro mixed train",
+		"TN": "Neuro self play",
+	}
+
+	// 2. Создаем упорядоченный список кодов для отображения в нужном порядке
+	codes := []string{"HH", "HN", "HL", "TM", "TN"}
+
+	// Создаем список названий для виджета Select
+	var options []string
+	for _, code := range codes {
+		options = append(options, modeToName[code])
+	}
+
+	// 3. Создаем выпадающий список
+	modeSelect := widget.NewSelect(options, func(selectedName string) {
+		// Ищем код по выбранному названию
+		for code, name := range modeToName {
+			if name == selectedName {
+				board.SwitchPlayMode(code)
+				break
+			}
+		}
+	})
+
+	// Устанавливаем значение по умолчанию (например, первый режим)
+	modeSelect.SetSelected(modeToName["TM"])
+
 	grid := container.NewGridWithColumns(15)
 	for r := 0; r < 15; r++ {
 		for c := 0; c < 15; c++ {
@@ -34,17 +66,14 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 		board.Reset(false)
 	})
 
-	// Добавляем кнопку Force Move
 	forceMove := widget.NewButtonWithIcon("Force Move", theme.MediaPlayIcon(), func() {
 		board.ForceNextMove()
 	})
 
-	// Добавляем кнопку Force Move Neuro
 	forceMoveNeuro := widget.NewButtonWithIcon("Force Move Neuro", theme.MediaPlayIcon(), func() {
 		board.ForceNextMoveNeuro()
 	})
 
-    // Добавляем кнопку отмены хода (Take Back)
 	takeBack := widget.NewButtonWithIcon("Take Back", theme.ContentUndoIcon(), func() {
 		for _, obj := range grid.Objects {
 			stack := obj.(*fyne.Container)
@@ -54,11 +83,9 @@ func Show(win fyne.Window, sd *StatusController) fyne.CanvasObject {
 		board.TakeBack()
 	})
 
-	// Объединяем все три кнопки в один ряд
-	buttons := container.NewHBox(reset, forceMove, takeBack, forceMoveNeuro)
+	buttons := container.NewHBox(reset, forceMove, takeBack, forceMoveNeuro, modeSelect)
 
 	board.Reset(true)
-
 	go syncPeriodic(board, sd)
 
 	// Передаем контейнер с кнопками в верхнюю часть (top)

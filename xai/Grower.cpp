@@ -122,6 +122,7 @@ void Grower::grow() {
         }
 
         //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
+        if (this->doTrain) {
         IF_READY_FOR_TRAIN {
             TRating lastRating = lastMove()->rating;
             bool isWin = std::abs(lastRating) > 16000;
@@ -245,7 +246,7 @@ void Grower::grow() {
                     //std::cout << "Requested legacy move " << (this->count%2?"(O)":"(X)") << std::endl;
                 }
             }
-        }
+        }}
         //================= !!! NEURO AUTOPLAY CODE ENDS =======================
 
 
@@ -538,3 +539,7 @@ char* Grower::getMsg9() {
 char* Grower::getMsgStatus() {
   return msgStatus;
 };
+
+void Grower::SwitchPlayMode(char* mode) {
+    this->doTrain = mode[0]=='T';
+}

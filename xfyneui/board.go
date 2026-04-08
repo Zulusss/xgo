@@ -66,6 +66,10 @@ func (b *board) ForceNextMove() {
     b.gb.MoveClick()
 }
 
+func (b *board) SwitchPlayMode(mode string) {
+    b.gb.SwitchPlayMode(mode);
+}
+
 func (b *board) ForceNextMoveNeuro() {
     b.gb.MoveNeuroClick()
 }

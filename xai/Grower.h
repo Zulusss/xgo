@@ -29,6 +29,9 @@ public:
         char* getMsg9();
         char* getMsgStatus();
 
+        volatile bool doTrain = false;
+        void SwitchPlayMode(char* mode);
+
 protected:
         volatile int userMoveRequested;
         int resultRecieved;
