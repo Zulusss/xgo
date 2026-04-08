@@ -382,7 +382,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
     if (++dbg % 200 == 0) {
         std::cout << "[TREE TRAIN " << dbg
                   << "] spread=" << spread
-                  << " avg target=" << target_probs.mean().item<float>()
+                  //<< " avg target=" << target_probs.mean().item<float>() //always gives 0.0044
                   << " childs=" << node->totalChilds
                   << " direct=" << (int)node->totalDirectChilds
                   << " adaptiveK=" << adaptiveK
