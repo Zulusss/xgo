@@ -263,7 +263,8 @@ void Grower::grow() {
                         int totl = lastMove()->totalChilds;
                         resultRecieved = lastMove()->rating;
                         if (res < 32600) {
-                            //moveRequested = true;
+                            if (HumanVsLegacy) moveRequested = true;
+                            if (HumanVsNeuro) moveNeuroRequested = true;
                         }
                 }
                 userMoveRequested = 255;
@@ -543,4 +544,6 @@ char* Grower::getMsgStatus() {
 void Grower::SwitchPlayMode(char* mode) {
     this->doTrain = mode[0]=='T';
     this->onlySelfPlay = (mode[0]=='T' && mode[1]=='N');
+    this->HumanVsLegacy = (mode[0]=='H' && mode[1]=='L');
+    this->HumanVsNeuro = (mode[0]=='H' && mode[1]=='N');
 }

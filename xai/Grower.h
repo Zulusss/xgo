@@ -31,6 +31,8 @@ public:
 
         volatile bool doTrain = false;
         volatile bool onlySelfPlay = false;
+        volatile bool HumanVsLegacy = false;
+        volatile bool HumanVsNeuro = false;
         void SwitchPlayMode(char* mode);
 
 protected:
