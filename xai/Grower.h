@@ -30,6 +30,7 @@ public:
         char* getMsgStatus();
 
         volatile bool doTrain = false;
+        volatile bool onlySelfPlay = false;
         void SwitchPlayMode(char* mode);
 
 protected:

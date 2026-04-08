@@ -121,7 +121,7 @@ void Grower::grow() {
                 maxChilds = childPerMove;
         }
 
-        //========= !!! NEURO vs Comp AUTOPLAY CODE BEGINS ==========
+        //========= !!! STEP 1-B : NEURO vs Comp AUTOPLAY CODE BEGINS ==========
         if (this->doTrain) {
         IF_READY_FOR_TRAIN {
             TRating lastRating = lastMove()->rating;
@@ -131,7 +131,7 @@ void Grower::grow() {
             if (!restartRequested && (this->count > 60 || (isWin && this->count > 1))) {
                 restartRequested = true;
 
-                if (!neuroWithNeuro && drawsCount+neuroWinsXCount+neuroWinsOCount >= 3) {
+                if (!neuroWithNeuro && (drawsCount+neuroWinsXCount+neuroWinsOCount >= 3) || onlySelfPlay) {
                     neuroWithNeuro = true;
                     if (!nwnActivated) {
                         nwnActivated = true;
@@ -141,7 +141,7 @@ void Grower::grow() {
                 int nvlPlayedCount = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount;
                 int nnPlayedCount = nnXCount+nnOCount+nnDCount;
                 int totalPlayed = nvlPlayedCount+nnPlayedCount;
-                if (neuroWithNeuro && totalPlayed%4>1) {
+                if (neuroWithNeuro && totalPlayed%4>1 && !onlySelfPlay) {
                     neuroWithNeuro = false;
                 }
                 childPerMove = neuroWithNeuro ? 500 : 13000;
@@ -542,4 +542,5 @@ char* Grower::getMsgStatus() {
 
 void Grower::SwitchPlayMode(char* mode) {
     this->doTrain = mode[0]=='T';
+    this->onlySelfPlay = (mode[0]=='T' && mode[1]=='N');
 }
