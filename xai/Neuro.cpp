@@ -54,7 +54,7 @@ struct GomokuNet : torch::nn::Module {
             v = torch::dropout(v, /*p=*/0.15, /*train=*/true);
         }
 
-        v = decodeAbsRating(value_fc2->forward(v));
+        v = value_fc2->forward(v);
 
         return std::make_tuple(p, v);
     }
@@ -171,7 +171,7 @@ void Neuro::save(float loss) {
     static int iter = 0;
     lossTracker->put(loss);
 
-    if (++iter % 1000 == 0) {
+    if (++iter % 600 == 0) {
         try {
             torch::save(model, "gomoku_model.pt");
             torch::save(*optimizer, "gomoku_optimizer.pt");
@@ -286,8 +286,8 @@ void Neuro::trainNetworkOnCurrentPosition() {
     auto [policy_logits, value] = model->forward(state);
 
     // 2️⃣ VALUE
-    TRating nodeRating0 = node->rating;
-    auto target_value = model->decodeAbsRating(torch::tensor({(float)nodeRating0}, torch::kFloat32).to(value.device()));
+    TRating currentRating = -node->rating;//rating for current player is opposite to rating of opponent
+    auto target_value = model->decodeAbsRating(torch::tensor({(float)currentRating}, torch::kFloat32).to(value.device()));
     auto value_loss = torch::mse_loss(value, target_value);
 
     // 3️⃣ Собираем кандидатов
@@ -300,7 +300,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         if (!child) continue;
 
         //для policy head, относительная оценка <=0, ноль означает лучший ход
-        float r = model->decodeAbsRating(torch::tensor({(float)(child->rating + nodeRating0)}, torch::kFloat32)).item<float>();
+        float r = std::clamp((child->rating - currentRating) / 2000.0f, -4.0f, 0.0f);
         candidates.push_back({i, r});
     }
 
@@ -384,9 +384,10 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   << " direct=" << (int)node->totalDirectChilds
                   << " adaptiveK=" << adaptiveK
                   << " value=" << value.item<float>()
-                  << " target=" << target_value
+                  << " target=" << target_value.item<float>()
                   << " loss=" << loss.item<float>()
                   << " policy_loss=" << policy_loss.item<float>()
+                  << " delta=" << (value - target_value).abs().item<float>()
                   << std::endl;
     }
 
