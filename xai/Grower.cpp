@@ -55,9 +55,13 @@ void Grower::grow() {
   bool nwnActivated = false;
    
 //  unsigned long beginTime = GetTickCount();
+  int step = 0;
   while (!exitRequested) {
 
+        sprintf(msg5, "Iteration: %d : %d", count, step);
+
         //********* STEP 1   initialize ***************
+        step = 10;
 
         if (playMode < 2) { //Human vs Human or Human vs Comp
               wizardMode = 0;
@@ -70,7 +74,7 @@ void Grower::grow() {
         TNode *firstNode = getFirstNode();
 
         TRating currRating = lastMove()->rating;
-        TRating currXRating = count%2
+        TRating currXRating = this->count%2
                         ? currRating
                         : -currRating;
 
@@ -124,6 +128,7 @@ void Grower::grow() {
         //========= !!! STEP 1-B : NEURO vs Comp AUTOPLAY CODE BEGINS ==========
         if (this->doTrain) {
         IF_READY_FOR_TRAIN {
+            step = 15;
             TRating lastRating = lastMove()->rating;
             bool isWin = std::abs(lastRating) > 16000;
 
@@ -148,7 +153,7 @@ void Grower::grow() {
 
                 bool xWon = this->count % 2 == lastRating > 0;
 
-                bool log = totalPlayed % 9 == 0;
+                bool log = totalPlayed % 23 == 0;
 
                 // Определяем, была ли нейросеть тем, кто сделал последний ход
                 bool neuroMovedLast = (neuroPlaysO == (this->count % 2 == 0));
@@ -251,6 +256,7 @@ void Grower::grow() {
 
 
         //********* STEP 2   process requested actions ***************
+        step = 20;
         if (restartRequested) {
             restartRequested = false;
             goBack(1);
@@ -307,6 +313,7 @@ void Grower::grow() {
         }
 
         //********* STEP 3   autoplay stuff ***************
+        step = 30;
 
         if (playMode == 3 && wizardMode > 0) {//Show debuts
                 if (!medRating) {
@@ -331,16 +338,18 @@ void Grower::grow() {
 
         //********* STEP 4   tree grow ***************
 
+
         if (lastCount <  maxChilds
-                        && currRating < 32300
-                        && currRating > -32300) {
+                        && std::abs(currRating) < 32600
+                        && std::abs(currRating) < 32300 || lastMove()->totalChilds <20) {
           for (int i=0; i<10; ++i) {
             buildTree();
           }
           changed = false;
           ++count;
+          step = 40;
         } else {
-          
+
           std::this_thread::sleep_for(std::chrono::nanoseconds(500000000));
           if (wizardMode) {
 
@@ -358,6 +367,7 @@ void Grower::grow() {
         //********* STEP 5   stat outputs ***************
 
         if (!(count%4)) {
+              step = 50;
               int min = 1000000000;
               int max = 0;
               int decr;
@@ -408,17 +418,17 @@ void Grower::grow() {
 //              sprintf(msg4, movesHash->miss3 > 0 || movesHash->miss4 > 0
 //                        ? "Hash collisions %d / %d" : "\0\0", movesHash->miss3, movesHash->miss4);
 
-              double updateFreq = (TNode::updatesCount || TNode::skippedCount)
-                        ? 100 * TNode::updatesCount / (double)(TNode::updatesCount + TNode::skippedCount)
-                        : 0;
-              sprintf(msg5, "Dev: %.3f%% : %d [%d / %d] [%d / %d]",
-                        updateFreq,
-                        (int)TNode::maxUpdated,
-                        (int)TNode::updatesCount,
-                        (int)TNode::skippedCount,
-                        (int)TNode::avgDiff,
-                        (int)TNode::avgSquareDiff
-                        );
+//              double updateFreq = (TNode::updatesCount || TNode::skippedCount)
+//                        ? 100 * TNode::updatesCount / (double)(TNode::updatesCount + TNode::skippedCount)
+//                        : 0;
+//              sprintf(msg5, "Dev: %.3f%% : %d [%d / %d] [%d / %d]",
+//                        updateFreq,
+//                        (int)TNode::maxUpdated,
+//                        (int)TNode::updatesCount,
+//                        (int)TNode::skippedCount,
+//                        (int)TNode::avgDiff,
+//                        (int)TNode::avgSquareDiff
+//                        );
 
               logger->printMissStats(msg6);
               node->printPosition(msg7, 200);

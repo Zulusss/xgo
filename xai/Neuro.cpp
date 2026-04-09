@@ -59,10 +59,6 @@ struct GomokuNet : torch::nn::Module {
         return std::make_tuple(p, v);
     }
 
-    torch::Tensor decodeAbsRating(torch::Tensor raw) {
-        return 0.63661978 * torch::atan(raw / 2600.0f);
-    }
-
     // Слои
     torch::nn::Conv2d conv1{nullptr}, conv2{nullptr}, conv3{nullptr};
     torch::nn::Conv2d policy_conv{nullptr}, value_conv{nullptr};
@@ -286,9 +282,10 @@ void Neuro::trainNetworkOnCurrentPosition() {
     auto [policy_logits, value] = model->forward(state);
 
     // 2️⃣ VALUE
-    TRating currentRating = -node->rating;//rating for current player is opposite to rating of opponent
-    auto target_value = model->decodeAbsRating(torch::tensor({(float)currentRating}, torch::kFloat32).to(value.device()));
-    auto value_loss = torch::mse_loss(value, target_value);
+    TRating currentRating = -node->rating;//rating for current player is opposite to rating of opponent,
+                //who made previous move, which is formed position presented by 'node', which actually holds his rating
+    auto target_value = decodeAbsRating(currentRating);
+    auto value_loss = torch::mse_loss(value, torch::tensor(target_value).to(value.device()));
 
     // 3️⃣ Собираем кандидатов
     std::vector<std::pair<int, float>> candidates;
@@ -299,7 +296,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         auto child = getChild(node, i);
         if (!child) continue;
 
-        //для policy head, относительная оценка <=0, ноль означает лучший ход
+        //для policy head, относительная оценка <= 0, ноль означает лучший ход
         float r = std::clamp((child->rating - currentRating) / 2000.0f, -4.0f, 0.0f);
         candidates.push_back({i, r});
     }
@@ -384,12 +381,15 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   << " direct=" << (int)node->totalDirectChilds
                   << " adaptiveK=" << adaptiveK
                   << " value=" << value.item<float>()
-                  << " target=" << target_value.item<float>()
+                  << " target=" << target_value
                   << " loss=" << loss.item<float>()
                   << " policy_loss=" << policy_loss.item<float>()
-                  << " delta=" << (value - target_value).abs().item<float>()
+                  << " delta=" << std::abs(value.item<float>() - target_value)
                   << std::endl;
     }
 
     save(loss.item<float>());
+}
+float Neuro::decodeAbsRating(TRating r) {
+    return 0.63661978 * std::atan(r / 2600.0f);
 }

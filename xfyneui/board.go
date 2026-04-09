@@ -125,12 +125,6 @@ func sync(b *board, sd *StatusController) {
 		return
 	}
 
-	// Example of updating from outside in main.go
-	//go func() {
-	//	statusData.Lines[0].Set("Game Engine Ready")
-	//	statusData.Lines[1].Set("Connected to Server")
-	//}()
-
 	xb := b.gb
 
 	actualMoves := xb.GetMovesCount()
@@ -187,6 +181,7 @@ func sync(b *board, sd *StatusController) {
 					addedCount++
  				} else {
 				    lastMove.Reset()
+				    b.displayedMovesCount -= 1
 				}
 
 				if b.humanX == (code < 0) {
