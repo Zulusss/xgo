@@ -103,7 +103,7 @@ protected:
 
 
 private:
-    MovingAverage *lossTracker;
+    MovingAverage *lossTracker, *avgSpread, *avgValueLoss, *avgPolicyLoss;
 
     //Указатели на нейросеть и её оптимизатор
     std::shared_ptr<GomokuNet> model;

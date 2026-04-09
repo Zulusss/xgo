@@ -75,7 +75,10 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
     setenv("NNPACK_MODE", "0", 1);
 #endif
 
-    lossTracker = new MovingAverage(3000);
+    lossTracker = new MovingAverage(1024);
+    avgSpread = new MovingAverage(1024);
+    avgValueLoss = new MovingAverage(1024);
+    avgPolicyLoss = new MovingAverage(1024);
 
     trackerNX = new MovingAverage(30);
     trackerNO = new MovingAverage(30);
@@ -285,7 +288,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
     TRating currentRating = -node->rating;//rating for current player is opposite to rating of opponent,
                 //who made previous move, which is formed position presented by 'node', which actually holds his rating
     auto target_value = decodeAbsRating(currentRating);
-    auto value_loss = torch::mse_loss(value, torch::tensor(target_value).to(value.device()));
+    auto value_loss = torch::mse_loss(value, torch::full_like(value, target_value));
 
     // 3️⃣ Собираем кандидатов
     std::vector<std::pair<int, float>> candidates;
@@ -311,10 +314,25 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     int adaptiveK = std::min((int)candidates.size(), std::min(maxK, (int)node->totalDirectChilds));
 
+    // Если adaptiveK == 1, это означает форсированную позицию (например, нужно
+    // закрыть открытую четвёрку противника и есть только один "правильный" ход).
+    //
+    // Однако для обучения нейросети это плохо: при K=1 target становится почти one-hot,
+    // и сеть не получает градиента различия между ходами (теряется информация о "насколько хуже"
+    // остальные варианты).
+    //
+    // Поэтому, если есть хотя бы ещё один кандидат, мы принудительно берём K=2:
+    // - лучший ход остаётся доминирующим
+    // - второй ход даёт слабый альтернативный сигнал
+    // - это улучшает обучение policy и обобщающую способность сети
+    if (adaptiveK == 1 && candidates.size() > 1) {
+        adaptiveK = 2;
+    }
     float bestVal = candidates[0].second;
     float kthVal  = candidates[adaptiveK - 1].second;
 
     float spread = std::max(0.0f, bestVal - kthVal);
+    avgSpread->put(spread);
 
     float T;
     if (spread > 0.5f)       T = 0.35f;
@@ -371,11 +389,15 @@ void Neuro::trainNetworkOnCurrentPosition() {
     loss.backward();
     optimizer->step();
 
+    avgValueLoss->put(value_loss.item<float>());
+    avgPolicyLoss->put(policy_loss.item<float>());
+
     // 🔹 Логгирование
     static int dbg = 0;
     if (++dbg % 200 == 0) {
         std::cout << "[TREE TRAIN " << dbg
                   << "] spread=" << spread
+                  << " avg.spread=" << avgSpread->toString()
                   //<< " avg target=" << target_probs.mean().item<float>() //always gives 0.0044
                   << " childs=" << node->totalChilds
                   << " direct=" << (int)node->totalDirectChilds
@@ -383,8 +405,13 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   << " value=" << value.item<float>()
                   << " target=" << target_value
                   << " loss=" << loss.item<float>()
+                  << " value_loss=" << value_loss.item<float>()
+                  << " avg.value_loss=" << avgValueLoss->toString()
                   << " policy_loss=" << policy_loss.item<float>()
+                  << " avg.policy_loss=" << avgPolicyLoss->toString()
                   << " delta=" << std::abs(value.item<float>() - target_value)
+                  << " maxP=" << probs.max().item<float>()
+                  << " entropy=" << entropy.item<float>()
                   << std::endl;
     }
 

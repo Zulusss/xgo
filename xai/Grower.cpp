@@ -437,7 +437,8 @@ void Grower::grow() {
               int nvlPlayedCount = drawsCount+neuroWinsXCount+neuroWinsOCount+regularWinsXCount+regularWinsOCount;
 
               sprintf(msg9, "Wins N/L %.1f%% [%d+%d / %d+%d / %d] N/N [%d / %d / %d]",
-                            (neuroWinsXCount + neuroWinsOCount) * 100.0f / (1 + nvlPlayedCount),
+                            nvlPlayedCount == 0 ? (neuroWinsXCount + neuroWinsOCount > 0 ? 100 : 0)
+                                : (neuroWinsXCount + neuroWinsOCount) * 100.0f / nvlPlayedCount,
                             neuroWinsXCount, neuroWinsOCount,
                             regularWinsXCount, regularWinsOCount, drawsCount,
                             nnXCount, nnOCount, nnDCount
