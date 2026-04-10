@@ -86,20 +86,17 @@ void Builder::goBack(int count0) {
         TNode *n = current()->node;
         critical = std::abs(n->rating) > 8000 ? current()->move : 0;
         back();
-        auto fRating =  getFirstNode()->rating;
-        if ( gameMode == 0 ? fRating >=1002 && fRating <= 3200 : true) {//skip learning if rating is not sharp, to reduce noice
-            n = current()->node;
+        n = current()->node;
 
-            // Обучаем, если позиция достаточно изучена
-            if (!n->o4 && !n->x4 && count > 0 && (n->totalChilds >= 40000
-                 || n->totalDirectChilds == 1
-                 || n->totalDirectChilds <= 4 && n->totalChilds >= 5000
-                )) {
-                //std::cout << "[AI] added = " << added << std::endl;
+        // Обучаем, если позиция достаточно изучена
+        if (count > 0 && (n->totalChilds >= 40000
+             || n->totalDirectChilds == 1
+             || n->totalDirectChilds <= 4 && n->totalChilds >= 5000
+            )) {
+            //std::cout << "[AI] added = " << added << std::endl;
 
-                static int skip = 0;
-                if (count > 3 || ++skip % 43 == 0) trainNetworkOnCurrentPosition();
-            }
+            static int skip = 0;
+            if (count > 3 || ++skip % 43 == 0) trainNetworkOnCurrentPosition();
         }
     }
     else
