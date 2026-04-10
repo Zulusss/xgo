@@ -349,7 +349,8 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
         float rel = bestVal - val;
 
-        float bonus = 1.0f + std::exp(-rel * 12.0f);
+        float rank = (float)(adaptiveK - j); // 1 = best
+        float bonus = 1.0f + std::log(rank + 1.0f);
 
         float x = std::clamp(val / T, -10.0f, 10.0f);
         float e = bonus * std::exp(x);
@@ -360,9 +361,6 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     if (sumExp > 1e-6f)
         target_probs /= sumExp;
-
-    // 🔥 Немного размазываем распределение
-    target_probs = target_probs * 0.92f + 0.08f / 225;
 
     // ===== POLICY LOSS =====
     auto log_probs = torch::log_softmax(policy_logits, 1);
@@ -379,7 +377,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         : (node->totalChilds > 50000) ? 0.4f : 0.5f;
 
     auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
-    if (!IS_X_TURN) loss *= 1.45f;//слишком высокий коэффициент побуждает играть в защиту
+    if (!IS_X_TURN) loss *= 1.4f;//слишком высокий коэффициент побуждает играть в защиту
 
     // L2 регуляризация
     float lambda = 1e-4f;
@@ -387,6 +385,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         loss += lambda * param.pow(2).sum();
 
     loss.backward();
+    torch::nn::utils::clip_grad_norm_(model->parameters(), 1.0);
     optimizer->step();
 
     avgValueLoss->put(value_loss.item<float>());
