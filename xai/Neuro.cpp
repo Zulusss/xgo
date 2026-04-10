@@ -379,7 +379,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         : (node->totalChilds > 50000) ? 0.4f : 0.5f;
 
     auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
-    if (!IS_X_TURN) loss *= 1.35f;//слишком высокий коэффициент побуждает играть в защиту
+    if (!IS_X_TURN) loss *= 1.4f;//слишком высокий коэффициент побуждает играть в защиту
 
     // L2 регуляризация
     float lambda = 1e-4f;
