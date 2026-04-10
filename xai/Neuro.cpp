@@ -79,6 +79,7 @@ Neuro::Neuro(SimplyNumbers* s, Hashtable* h, int gameMode)
     avgSpread = new MovingAverage(1024);
     avgValueLoss = new MovingAverage(1024);
     avgPolicyLoss = new MovingAverage(1024);
+    avgEntropy = new MovingAverage(1024);
 
     trackerNX = new MovingAverage(30);
     trackerNO = new MovingAverage(30);
@@ -368,6 +369,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
     auto probs = torch::softmax(policy_logits, 1);
     auto entropy = -torch::sum(probs * log_probs);
+    avgEntropy->put(entropy.item<float>());
 
     float entropyCoef = (!IS_X_TURN ? 0.04f : 0.02f);
     policy_loss -= entropyCoef * entropy;
@@ -385,7 +387,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         loss += lambda * param.pow(2).sum();
 
     loss.backward();
-    torch::nn::utils::clip_grad_norm_(model->parameters(), 1.0);
+    torch::nn::utils::clip_grad_norm_(model->parameters(), 1.0);//убирает редкие “взрывы обучения”, особенно важно при exp/log shaping
     optimizer->step();
 
     avgValueLoss->put(value_loss.item<float>());
@@ -400,9 +402,9 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   //<< " avg target=" << target_probs.mean().item<float>() //always gives 0.0044
                   << " childs=" << node->totalChilds
                   << " direct=" << (int)node->totalDirectChilds
-                  << " adaptiveK=" << adaptiveK
-                  << " value=" << value.item<float>()
-                  << " target=" << target_value
+                  << " K=" << adaptiveK
+                  //<< " value=" << value.item<float>()
+                  //<< " target=" << target_value
                   << " loss=" << loss.item<float>()
                   << " value_loss=" << value_loss.item<float>()
                   << " avg.value_loss=" << avgValueLoss->toString()
@@ -411,6 +413,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   << " delta=" << std::abs(value.item<float>() - target_value)
                   << " maxP=" << probs.max().item<float>()
                   << " entropy=" << entropy.item<float>()
+                  << " avg.entropy=" << avgEntropy->toString()
                   << std::endl;
     }
 
