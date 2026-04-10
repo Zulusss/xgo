@@ -334,8 +334,10 @@ void Neuro::trainNetworkOnCurrentPosition() {
     float spread = std::max(0.0f, bestVal - kthVal);
     avgSpread->put(spread);
 
-    float T = 0.6f - std::clamp(spread, 0.0f, 2.0f) * 0.15f;
-    T = std::clamp(T, 0.25f, 0.6f);
+    float T;
+    if (spread > 0.5f)       T = 0.35f;
+    else if (spread > 0.2f)  T = 0.45f;
+    else                     T = 0.5f;
 
     // 4️⃣ Формируем целевое распределение для policy
     auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
@@ -345,9 +347,13 @@ void Neuro::trainNetworkOnCurrentPosition() {
         float val = candidates[j].second;
         int idx = candidates[j].first;
 
-        float rel = (val - bestVal) / T;
+        float rel = bestVal - val;
 
-        float e = std::exp(std::clamp(rel, -10.0f, 0.0f));
+        float bonus = 1.0f + std::exp(-rel * 12.0f);
+
+        float x = std::clamp(val / T, -10.0f, 10.0f);
+        float e = bonus * std::exp(x);
+
         target_probs[idx] = e;
         sumExp += e;
     }
@@ -355,12 +361,8 @@ void Neuro::trainNetworkOnCurrentPosition() {
     if (sumExp > 1e-6f)
         target_probs /= sumExp;
 
-    if (adaptiveK == 1) {
-        target_probs = target_probs * 0.7f + 0.3f / 225;
-    }
-
     // 🔥 Немного размазываем распределение
-    target_probs = target_probs * 0.95f + 0.05f / 225;
+    target_probs = target_probs * 0.92f + 0.08f / 225;
 
     // ===== POLICY LOSS =====
     auto log_probs = torch::log_softmax(policy_logits, 1);
@@ -377,8 +379,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
         : (node->totalChilds > 50000) ? 0.4f : 0.5f;
 
     auto loss = beta * policy_loss + (1.0f - beta) * value_loss;
-    if (!IS_X_TURN) loss *= 1.35f;//слишком высокий коэффициент (1.5 и более) заметно побуждает играть в защиту
-    if (adaptiveK == 1) loss *= 0.5f;
+    if (!IS_X_TURN) loss *= 1.45f;//слишком высокий коэффициент побуждает играть в защиту
 
     // L2 регуляризация
     float lambda = 1e-4f;
@@ -400,7 +401,7 @@ void Neuro::trainNetworkOnCurrentPosition() {
                   //<< " avg target=" << target_probs.mean().item<float>() //always gives 0.0044
                   << " childs=" << node->totalChilds
                   << " direct=" << (int)node->totalDirectChilds
-                  << " K=" << adaptiveK
+                  << " adaptiveK=" << adaptiveK
                   << " value=" << value.item<float>()
                   << " target=" << target_value
                   << " loss=" << loss.item<float>()
