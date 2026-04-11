@@ -294,81 +294,104 @@ void Neuro::trainNetworkOnCurrentPosition() {
     // 3️⃣ Собираем кандидатов
     std::vector<std::pair<int, float>> candidates;
 
+    // 1. Нормальные кандидаты из дерева
     for (int i = 0; i < 225; ++i) {
         if (kl[i] != 1) continue;
 
         auto child = getChild(node, i);
         if (!child) continue;
 
-        //для policy head, относительная оценка <= 0, ноль означает лучший ход
+        // относительный рейтинг (<= 0, 0 = лучший)
         float r = std::clamp((child->rating - currentRating) / 2000.0f, -4.0f, 0.0f);
         candidates.push_back({i, r});
     }
 
+    // 2. Если кандидатов мало — добавляем плохие ходы
+    if (candidates.size() < 3) {
+
+        int extraNeeded = 3 - (int)candidates.size();
+
+        for (int i = 0; i < 225 && extraNeeded > 0; ++i) {
+            if (kl[i] != 1) continue;
+
+            // пропускаем уже существующие
+            bool already = false;
+            for (auto &c : candidates) {
+                if (c.first == i) {
+                    already = true;
+                    break;
+                }
+            }
+            if (already) continue;
+
+            // плохой ход (хуже всех)
+            candidates.push_back({i, -4.5f});
+            extraNeeded--;
+        }
+    }
+
+    // если вообще нет кандидатов — выходим
     if (candidates.empty()) return;
 
-    // Сортировка по рейтингу (убывание)
+    // 3. Сортировка (лучшие сверху)
     std::sort(candidates.begin(), candidates.end(),
               [](const auto &a, const auto &b){ return a.second > b.second; });
 
+    // 4. Определяем K
     int maxK = IS_X_TURN ? 5 : 6;
 
-    int adaptiveK = std::min((int)candidates.size(), std::min(maxK, (int)node->totalDirectChilds));
+    int adaptiveK = std::min((int)candidates.size(), std::max(2, maxK));
 
-    // Если adaptiveK == 1, это означает форсированную позицию (например, нужно
-    // закрыть открытую четвёрку противника и есть только один "правильный" ход).
-    //
-    // Однако для обучения нейросети это плохо: при K=1 target становится почти one-hot,
-    // и сеть не получает градиента различия между ходами (теряется информация о "насколько хуже"
-    // остальные варианты).
-    //
-    // Поэтому, если есть хотя бы ещё один кандидат, мы принудительно берём K=2:
-    // - лучший ход остаётся доминирующим
-    // - второй ход даёт слабый альтернативный сигнал
-    // - это улучшает обучение policy и обобщающую способность сети
-    if (adaptiveK == 1 && candidates.size() > 1) {
-        adaptiveK = 2;
-    }
+    // 5. Spread (для логов)
     float bestVal = candidates[0].second;
     float kthVal  = candidates[adaptiveK - 1].second;
 
     float spread = std::max(0.0f, bestVal - kthVal);
     avgSpread->put(spread);
 
-    float T;
-    if (spread > 0.5f)       T = 0.35f;
-    else if (spread > 0.2f)  T = 0.45f;
-    else                     T = 0.5f;
+    // =========================================================
+    // 4️⃣ POLICY TARGET (стабильная версия)
+    // =========================================================
 
-    // 4️⃣ Формируем целевое распределение для policy
-    auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
+    // temperature (мягче и стабильнее)
+    float T = 0.8f;
+
+    // softmax по top-K кандидатам
+    std::vector<float> probs_local(adaptiveK);
     float sumExp = 0.0f;
 
     for (int j = 0; j < adaptiveK; ++j) {
-        float val = candidates[j].second;
-        int idx = candidates[j].first;
-
-        float rel = bestVal - val;
-
-        float rank = (float)(adaptiveK - j); // 1 = best
-        float bonus = 1.0f + std::log(rank + 1.0f);
-
-        float x = std::clamp(val / T, -10.0f, 10.0f);
-        float e = bonus * std::exp(x);
-
-        target_probs[idx] = e;
+        float x = candidates[j].second / T; // <= 0
+        float e = std::exp(x);
+        probs_local[j] = e;
         sumExp += e;
     }
+    if (sumExp < 1e-8f) sumExp = 1e-8f;
+    for (int j = 0; j < adaptiveK; ++j) {
+        probs_local[j] /= sumExp;
+    }
 
-    if (sumExp > 1e-6f)
-        target_probs /= sumExp;
+    // распределение на всё поле
+    auto target_probs = torch::zeros({225}, torch::kFloat32).to(policy_logits.device());
+
+    // небольшая "пыль" — чтобы всегда был градиент
+    float eps = 0.03f;
+    target_probs += eps / 225.0f;
+
+    // добавляем вероятности топ-K
+    for (int j = 0; j < adaptiveK; ++j) {
+        int idx = candidates[j].first;
+        target_probs[idx] += (1.0f - eps) * probs_local[j];
+    }
+    target_probs = target_probs.contiguous();
 
     // ===== POLICY LOSS =====
     auto log_probs = torch::log_softmax(policy_logits, 1);
     auto policy_loss = -torch::sum(target_probs * log_probs[0]);
 
-    auto probs = torch::softmax(policy_logits, 1);
-    auto entropy = -torch::sum(probs * log_probs);
+    auto log_probs0 = torch::log_softmax(policy_logits[0], 0);
+    auto probs = torch::exp(log_probs0);
+    auto entropy = -torch::sum(probs * log_probs0);
     avgEntropy->put(entropy.item<float>());
 
     float entropyCoef = (!IS_X_TURN ? 0.04f : 0.02f);
