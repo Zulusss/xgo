@@ -311,7 +311,10 @@ void Neuro::trainNetworkOnCurrentPosition() {
 
         int extraNeeded = 3 - (int)candidates.size();
 
-        for (int i = 0; i < 225 && extraNeeded > 0; ++i) {
+        int bm = predictBestMove();
+
+        for (int i = -1; i < 225 && extraNeeded > 0; ++i) {
+            if (i == -1) i = bm;
             if (kl[i] != 1) continue;
 
             // пропускаем уже существующие
