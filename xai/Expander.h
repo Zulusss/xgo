@@ -23,15 +23,18 @@ public:
 
 protected:
         Expander(SimplyNumbers *simplyGen, Hashtable *movesHash);
-        TMove expand(int start, TNode* cursor);
+        // TMove expand(int start, TNode* cursor);
         void multiExpand(TNode* cursor);
         void fullExpand(TNode* cursor);
         bool isExpected(TNode* curr, TMove i);
 
 private:
         int cnt;
+        int lastCreated;
+        int addedPerStep[MULTI_EXPAND_TIMES];
         MovesBucket newChilds;
         MovesBucket otherNewChilds; //second priority
+        TMove expand(int start, TNode* cursor);
         void findMovesToExpand(int start); //fills in newChilds and otherNewChilds
         void addChildNoDupe(TNode* parent, TMove m);
         void addChild(TNode* parent, TMove m);

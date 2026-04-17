@@ -80,7 +80,8 @@ int GameBoard::move() {
   int totl = node->totalDirectChilds;
   if (totl == 0) {
         //logger->error("no childs");
-        expand(0, node);
+        // expand(0, node);
+        multiExpand(node);
         //return -32600;
   }
 

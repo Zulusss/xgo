@@ -20,7 +20,8 @@ Grower::Grower(SimplyNumbers *simplyGen, Hashtable *movesHash,
 
     userMoveRequested = 255;
     forward(112, node);
-    expand(1, node);
+    // expand(1, node);
+    multiExpand(node);
 };
 
 
